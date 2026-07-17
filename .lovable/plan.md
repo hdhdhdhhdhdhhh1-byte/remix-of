@@ -1,98 +1,51 @@
+## الهدف
+فصل التطبيق عن Lovable Cloud وربطه بمشروع Supabase الخارجي الخاص بك، ليعمل بشكل صحيح على Netlify (بما في ذلك إضافة المستخدمين).
 
-# خطة تنفيذ التوجيه 2.1 — نظام إدارة البطارية
+## المتطلبات منك قبل التنفيذ
+1. **مفاتيح مشروع Supabase الخارجي** (من Project Settings → API):
+   - `VITE_SUPABASE_URL` (مثال: `https://bkwwtkfejvyqjzaririv.supabase.co`)
+   - `VITE_SUPABASE_PUBLISHABLE_KEY` (anon/publishable key)
+2. **ملف SQL للمخطط**: سأولّد لك ملف SQL شامل يحتوي على كل الجداول (12 جدول)، الدوال (11 دالة)، السياسات (RLS)، والصلاحيات (GRANT) الموجودة حالياً في Lovable Cloud لتشغيله في SQL Editor بمشروعك الخارجي.
+3. **متغيرات البيئة في Netlify**: تُضاف من Site Settings → Environment variables.
 
-سأعمل فوق المشروع الحالي فقط. لن يتم حذف أي بيانات أو مستخدمين أو صلاحيات أو صفحات. سأفحص كل نقطة أولاً، وأنفّذ ما لم يُنفَّذ بعد فقط.
+## الخطوات
 
-## حالة النظام الحالية (مما أراه في الكود)
+### 1) توليد ملف SQL للنقل
+- إنشاء `supabase/external-schema.sql` يحتوي على:
+  - إنشاء نوع `app_role`
+  - إنشاء جميع الجداول العامة (12 جدول) مع الأعمدة والافتراضات
+  - GRANT statements لكل جدول
+  - تفعيل RLS + جميع السياسات
+  - جميع الدوال (`has_role`, `is_admin`, `my_role`, `my_permissions`, `my_pages`, `handle_new_user`, `set_updated_at`, `enforce_approved_report_lock`, `enforce_approved_entries_lock`, `latest_approved_report_date`, `person_current_status`, `has_permission`)
+  - الترجرات (triggers) للجداول
+  - Trigger `on_auth_user_created` على `auth.users` لإنشاء profile تلقائياً
+- تعليمات تشغيله في SQL Editor بمشروعك الجديد.
 
-جاهز جزئياً:
-- فصل حفظ/اعتماد للتقرير موجود (`daily_reports.approved_at`) — لكن لا توجد صفحة عرض مستقلة عن صفحة الإدخال.
-- جدول `services` بحقول اعتماد وأرشفة موجود — لكن لا فصل صفحتي رفع/عرض.
-- `audit_log` موجود، لكن غير مفعّل كلياً.
-- `page_visibility` و`permissions` موسّعة (view/edit/add/delete/approve/print/export_pdf/export_image/cancel_approval) — بنية جيدة لكن تحتاج ربطها بكل الأزرار/الصفحات.
-- صفحات: persons, reports, services, archive, users, leaves, weapons, audit, dashboard, leaders موجودة.
+### 2) تحديث `.env` بمفاتيح المشروع الخارجي
+استبدال محتوى `.env` بالكامل بمفاتيح `bkwwtkfejvyqjzaririv` التي ستزودني بها.
 
-غير مُنفَّذ ويحتاج بناء:
-1. فصل صفحات: `reports` (إدخال) + `reports.view` (عرض المعتمد فقط) — الملف `reports.view.tsx` موجود لكن يجب مراجعته وربطه بمنطق واضح.
-2. عرض آخر تقرير معتمد تلقائياً + بحث بالتاريخ.
-3. علامة "تم تعديل بعد الاعتماد" (عمود `re_approved_after_edit` + `original_approved_at`).
-4. قسم التغيرات: لليوم فقط، لا نسخ من أمس.
-5. `persons` — استبدال "نشط/غير نشط" بـ"الحالة الحالية" (محسوبة من آخر تقرير معتمد — الدالة `person_current_status` موجودة).
-6. الخدمات: فصل رفع/عرض + نافذة منبثقة بكل خدمات اليوم بترتيب (التبة/البوابة/مترس١/مترس٢/المستلم) + تصفية قوائم الأفراد على ف١/ف٢ فقط.
-7. الإجازات: نموذج معاينة + طباعة.
-8. الأرشيف: يشمل التقارير/الخدمات/الإجازات مع معاينة كاملة + تجميع خدمات نفس اليوم، صلاحيات القراءة الافتراضية + المالك يعدل/يحذف.
-9. القائمة الجانبية: تختفي تلقائياً عند فتح صفحة + سحب من الطرف/سحب للخلف.
-10. لوحة رئيسية: ترحيب "أهلاً {الاسم}" + toast منبثق عند تسجيل الدخول.
-11. وضع التعديل (المالك فقط): تحرير النصوص/العناوين/الألوان/الشعار مع حفظ في جدول `ui_settings` وتطبيق على كل المستخدمين.
-12. زر "تحديث النظام": مزامنة يدوية للبيانات + إرسال طابور العمليات المحلية.
-13. العمل بدون إنترنت (Offline-first): Dexie/IndexedDB + طابور كتابات + دمج ذكي للتعارضات.
-14. صلاحيات دقيقة لكل صفحة/زر — بما فيها تقسيم `reports` إلى موديولين: `reports_entry` (رفع) و`reports_view` (عرض) بحيث يمكن منح المستخدم عرض دون رفع والعكس. نفس المنطق لـ `services`.
-15. Audit log كامل عبر triggers على كل الجداول الأساسية + login/logout/permission_change.
-16. النسخ الاحتياطي (المالك): تصدير JSON كامل + استعادة.
-17. تجاوب كامل (هاتف/تابلت/كمبيوتر) — موجود جزئياً، مراجعة.
+### 3) تحديث `src/integrations/supabase/client.ts`
+الملف حالياً يقرأ من `import.meta.env.VITE_SUPABASE_*` — يعمل تلقائياً بعد تحديث `.env`، لكن نظراً لأنه ملف auto-generated سنقوم بجعله ثابتاً (يقرأ فقط من env بدون fallback على process.env) لضمان عدم إعادة توليده لاحقاً.
 
-## التنفيذ على مراحل (يتم عرض كل مرحلة للموافقة)
+### 4) تعليمات نشر Netlify
+سأزودك بقائمة متغيرات البيئة المطلوب إضافتها في Netlify:
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_PUBLISHABLE_KEY`
+- `VITE_SUPABASE_PROJECT_ID`
 
-**المرحلة 1 — قاعدة البيانات (Migration واحدة):**
-- إضافة أعمدة: `daily_reports.re_approved_after_edit boolean`, `daily_reports.original_approved_at timestamptz`.
-- تقسيم موديولات الصلاحيات: بيانات مبدئية `permissions.module` تدعم `reports_entry`, `reports_view`, `services_entry`, `services_view`, `archive`, `persons`, `leaves`, `audit`, `users`, `backup`, `ui_edit`, `system_refresh`.
-- جدول `ui_settings` (key/value, JSON) — للمالك فقط عبر RLS.
-- جدول `sync_queue_meta` (اختياري لتتبع المزامنة).
-- Trigger على `daily_reports`: عند إعادة الاعتماد بعد تعديل، رفع `re_approved_after_edit=true`.
-- Triggers شاملة على `persons/services/leaves/daily_reports/report_entries/user_roles/permissions` تكتب في `audit_log`.
-- GRANTs + RLS لكل جدول جديد.
+### 5) إعداد Auth في المشروع الخارجي (يدوياً منك)
+- تفعيل Email provider في Authentication → Providers
+- إضافة رابط Netlify في Authentication → URL Configuration → Site URL & Redirect URLs
+- (اختياري) إذا تستخدم Google OAuth، تفعيله من نفس القائمة
 
-**المرحلة 2 — طبقة الصلاحيات في الواجهة:**
-- تحديث `auth-context.tsx`: expose helper `can(module, action)` + `visible(page_key)`.
-- تحديث `AppSidebar` لعرض العناصر بناءً على `page_visibility` + `permissions`.
-- ربط كل زر (حفظ/اعتماد/إلغاء اعتماد/تعديل/حذف/طباعة/PDF/صورة) بـ `can()`.
+## تنبيهات مهمة
+- **البيانات الموجودة حالياً في Lovable Cloud لن تُنقل تلقائياً**. إذا أردت نقلها استخدم Cloud → Advanced → Export data ثم استيرادها يدوياً في المشروع الخارجي.
+- بعد الفصل، المعاينة داخل Lovable قد تظل تستخدم Lovable Cloud (لأن `.env` في Lovable قد يُعاد توليده)، لكن Netlify سيستخدم المفاتيح الخارجية.
+- لن تعود قادراً على استخدام أدوات Lovable Cloud (migrations, secrets, edge functions) للتحكم بالمشروع الخارجي — كل التغييرات ستكون يدوية عبر Supabase Dashboard.
 
-**المرحلة 3 — التقارير:**
-- `_authenticated/reports.tsx` = إدخال فقط (يتطلب `reports_entry.add/edit/approve`).
-- `_authenticated/reports.view.tsx` = عرض المعتمد فقط: آخر معتمد افتراضياً + بحث بالتاريخ + شارة "تم تعديل بعد الاعتماد".
-- قسم التغيرات: يقارن مع اليوم السابق، ويعرض فقط تغيرات اليوم الحالي.
-- ربط بمسار Sidebar منفصل.
+## المطلوب منك للمتابعة
+أرسل لي:
+1. `VITE_SUPABASE_URL` الخاص بمشروع `bkwwtkfejvyqjzaririv`
+2. `VITE_SUPABASE_PUBLISHABLE_KEY` (anon key)
 
-**المرحلة 4 — الخدمات:**
-- `services.tsx` (رفع) + `services.view.tsx` جديد (عرض بنافذة منبثقة تجمع كل خدمات اليوم بالترتيب المحدد).
-- تصفية قوائم الأفراد على `formation IN ('ف١','ف٢')` فقط.
-
-**المرحلة 5 — الأفراد:**
-- استبدال حقل "نشط" بعرض "الحالة الحالية" من `person_current_status` (read-only).
-- الاحتفاظ بعمود `active` داخلياً لكن إخفاؤه من الواجهة.
-
-**المرحلة 6 — الإجازات + الأرشيف:**
-- نموذج معاينة رسمي للإجازة + زر طباعة.
-- `archive.tsx` موحّد: تقارير/خدمات/إجازات + معاينة كاملة + خدمات اليوم مجمّعة.
-
-**المرحلة 7 — UI/UX:**
-- تحسين Sidebar (auto-close + swipe).
-- Dashboard: ترحيب باسم المستخدم + toast عند تسجيل الدخول.
-
-**المرحلة 8 — وضع التعديل + النسخ الاحتياطي + تحديث النظام:**
-- `ui_settings` provider + محرر شامل للمالك.
-- `backup.tsx`: تصدير/استعادة JSON.
-- زر Refresh: `queryClient.invalidateQueries()` + flush sync queue.
-
-**المرحلة 9 — Offline (Dexie + Service Worker):**
-- طبقة Dexie لتخزين reads + طابور writes.
-- Hook `useOnlineSync` يشغّل flush عند عودة الاتصال.
-- PWA manifest + SW (production فقط).
-
-**المرحلة 10 — اختبار شامل + audit trail + إصلاحات.**
-
-## ملاحظات تقنية
-
-- كل Migration منفصلة، بعد الموافقة فقط.
-- لا حذف بيانات؛ إضافة أعمدة/جداول فقط.
-- الصلاحيات: كل ميزة جديدة تُسجَّل تلقائياً في قائمة الموديولات المعروفة في `users.tsx` حتى يمنحها/يمنعها المالك.
-- Offline+conflict resolution: last-write-wins مع `updated_at` + احتفاظ بنسخة قبل الدمج في `audit_log`.
-
-## سؤال قبل البدء
-
-بسبب حجم العمل الكبير جداً (10 مراحل، كل واحدة تعدّل عدة ملفات)، هل تريدني:
-- (أ) **البدء بالمرحلة 1 (قاعدة البيانات) الآن** ثم المتابعة مرحلة مرحلة مع مراجعتك بعد كل واحدة؟
-- (ب) **البدء بأهم مرحلتين للاستخدام اليومي فوراً**: التقارير (3) + الخدمات (4) + الصلاحيات الدقيقة (2)، وتأجيل Offline/PWA/وضع التعديل لاحقاً؟
-- (ج) ترتيب مختلف تحدده أنت؟
-
-توصيتي: **(ب)** — لأن الفصل بين رفع/عرض والصلاحيات الدقيقة هي أعلى قيمة لك الآن، بينما Offline/PWA ميزات ثقيلة تستحق مرحلة مستقلة.
+بمجرد استلامها سأنفذ الخطوات 1-4.
