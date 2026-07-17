@@ -1,0 +1,14 @@
+User-agent: *
+Allow: /
+Disallow: /dashboard
+Disallow: /archive
+Disallow: /audit
+Disallow: /leaders
+Disallow: /leaves
+Disallow: /persons
+Disallow: /reports
+Disallow: /services
+Disallow: /users
+Disallow: /weapons
+
+Sitemap: https://battery-squad-hub.lovable.app/sitemap.xml
