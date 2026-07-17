@@ -13,7 +13,7 @@ import { toast } from "sonner";
 import { Save, CheckCircle2, Printer, FileDown } from "lucide-react";
 import { FORMATIONS, STATUS_LABEL, ATTENDANCE_STATUSES, type AttendanceStatus } from "@/lib/constants";
 import { exportElementAsPDF, printElement } from "@/lib/export";
-import logoAsset from "@/assets/resistance-logo.jpg.asset.json";
+import logoUrl from "@/assets/resistance-logo.jpg";
 
 export const Route = createFileRoute("/_authenticated/reports/")({
   component: ReportsPage,
@@ -356,7 +356,7 @@ function ReportsPage() {
           {/* Center: logo + bismillah */}
           <div className="flex-1 text-center">
             <div className="text-base font-bold mb-1">بسم الله الرحمن الرحيم</div>
-            <img src={logoAsset.url} alt="شعار المقاومة الوطنية" className="mx-auto" style={{ width: "90px", height: "90px", objectFit: "contain" }} />
+            <img src={logoUrl} alt="شعار المقاومة الوطنية" className="mx-auto" style={{ width: "90px", height: "90px", objectFit: "contain" }} />
           </div>
           {/* Right: military headings */}
           <div className="text-sm leading-7 text-right min-w-[220px]">
