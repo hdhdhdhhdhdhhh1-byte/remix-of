@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import logoAsset from "@/assets/resistance-logo.jpg.asset.json";
+import logoUrl from "@/assets/resistance-logo.jpg";
 
 const searchSchema = z.object({ redirect: z.string().optional() });
 
@@ -59,7 +59,7 @@ function AuthPage() {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary via-primary/90 to-primary/70 px-4">
       <Card className="w-full max-w-md shadow-2xl">
         <CardHeader className="text-center">
-          <img src={logoAsset.url} alt="شعار البطارية" className="mx-auto h-24 w-24 rounded-full object-cover shadow-lg" />
+          <img src={logoUrl} alt="شعار البطارية" className="mx-auto h-24 w-24 rounded-full object-cover shadow-lg" />
           <CardTitle className="text-2xl mt-4">نظام إدارة البطارية</CardTitle>
           <CardDescription>تسجيل الدخول للمتابعة</CardDescription>
         </CardHeader>

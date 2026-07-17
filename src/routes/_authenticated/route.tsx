@@ -33,7 +33,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import logoAsset from "@/assets/resistance-logo.jpg.asset.json";
+import logoUrl from "@/assets/resistance-logo.jpg";
 import type { ModuleKey } from "@/lib/auth-context";
 
 export const Route = createFileRoute("/_authenticated")({
@@ -162,7 +162,7 @@ function AppSidebar({
     <Sidebar collapsible="icon" side="right">
       <SidebarHeader className="border-b border-sidebar-border">
         <div className="flex items-center gap-2 p-2">
-          <img src={logoAsset.url} alt="شعار" className="h-10 w-10 rounded-full object-cover flex-shrink-0" />
+          <img src={logoUrl} alt="شعار" className="h-10 w-10 rounded-full object-cover flex-shrink-0" />
           <div className="min-w-0 group-data-[collapsible=icon]:hidden">
             <div className="font-bold text-sm text-sidebar-foreground truncate">نظام البطارية</div>
             <div className="text-xs text-sidebar-foreground/70 truncate">{role ?? ""}</div>

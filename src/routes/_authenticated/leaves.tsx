@@ -14,7 +14,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogT
 import { toast } from "sonner";
 import { Plus, FileText, CheckCircle2, Trash2, Printer, FileDown } from "lucide-react";
 import { exportElementAsPDF, printElement } from "@/lib/export";
-import logoAsset from "@/assets/resistance-logo.jpg.asset.json";
+import logoUrl from "@/assets/resistance-logo.jpg";
 
 export const Route = createFileRoute("/_authenticated/leaves")({
   component: LeavesPage,
@@ -277,7 +277,7 @@ function LeavePreview({ leave }: { leave: LeaveRow }) {
           </div>
           <div className="flex-1 text-center">
             <div className="text-base font-bold mb-1">بسم الله الرحمن الرحيم</div>
-            <img src={logoAsset.url} alt="شعار المقاومة" className="mx-auto" style={{ width: 80, height: 80, objectFit: "contain" }} />
+            <img src={logoUrl} alt="شعار المقاومة" className="mx-auto" style={{ width: 80, height: 80, objectFit: "contain" }} />
           </div>
           <div className="text-sm leading-7 text-right min-w-[220px]">
             <div className="font-bold">قيادة قوات المقاومة الوطنية</div>
