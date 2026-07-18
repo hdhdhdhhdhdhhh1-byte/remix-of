@@ -25,6 +25,7 @@ function AuthPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
+  const [shake, setShake] = useState(false);
 
   useEffect(() => {
     // Ensure owner account exists on first launch (idempotent)
@@ -44,6 +45,8 @@ function AuthPage() {
     setBusy(false);
     if (error) {
       toast.error("فشل تسجيل الدخول: " + error.message);
+      setShake(true);
+      setTimeout(() => setShake(false), 450);
       return;
     }
     const { data: userData } = await supabase.auth.getUser();
@@ -57,7 +60,7 @@ function AuthPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary via-primary/90 to-primary/70 px-4">
-      <Card className="w-full max-w-md shadow-2xl">
+      <Card className={`w-full max-w-md shadow-2xl animate-login-enter ${shake ? "animate-login-shake" : ""}`}>
         <CardHeader className="text-center">
           <img src={logoUrl} alt="شعار البطارية" className="mx-auto h-24 w-24 rounded-full object-cover shadow-lg" />
           <CardTitle className="text-2xl mt-4">نظام إدارة البطارية</CardTitle>
@@ -90,7 +93,7 @@ function AuthPage() {
                 autoComplete="current-password"
               />
             </div>
-            <Button type="submit" className="w-full" disabled={busy}>
+            <Button type="submit" className="w-full transition-transform hover:scale-[1.02]" disabled={busy}>
               {busy ? "جارٍ الدخول..." : "دخول"}
             </Button>
           </form>
