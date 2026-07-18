@@ -30,3 +30,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Local env & Lovable-managed Supabase
+.env.local
+/supabase
