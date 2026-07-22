@@ -133,17 +133,27 @@ function ServicesPage() {
   });
 
   const approveMut = useMutation({
-    mutationFn: async (s: ServiceRow) => {
-      const { error } = await supabase
-  .from("services")
-  .update({
-    approved_at: new Date().toISOString(),
-    approved_by: user?.id ?? null,
-  })
-  .eq("id", s.id);
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["services"] }); toast.success("تم الاعتماد"); },
-    onError: (e: Error) => toast.error(e.message),
-  });
+  mutationFn: async (s: ServiceRow) => {
+    const { error } = await supabase
+      .from("services")
+      .update({
+        approved_at: new Date().toISOString(),
+        approved_by: user?.id ?? null,
+      })
+      .eq("id", s.id);
+
+    if (error) throw error;
+  },
+
+  onSuccess: () => {
+    qc.invalidateQueries({ queryKey: ["services"] });
+    toast.success("تم الاعتماد");
+  },
+
+  onError: (e: Error) => {
+    toast.error(e.message);
+  },
+});
 
   const deleteMut = useMutation({
     mutationFn: async (id: string) => {
