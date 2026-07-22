@@ -47,14 +47,54 @@ function ArchivePage() {
     },
   });
   const { data: leaves = [] } = useQuery({
-    queryKey: ["arch-leaves", from, to],
-    queryFn: async () => {
-      let q = supabase.from("leaves").select("*, persons(full_name, military_number, formation)").order("start_date", { ascending: false });
-      if (from) q = q.gte("start_date", from);
-      if (to) q = q.lte("start_date", to);
-      return (await q).data ?? [];
-    },
-  });
+  queryKey: ["arch-leaves", from, to],
+  queryFn: async () => {
+
+    const { data: leaveData, error } =
+      await supabase
+        .from("leaves")
+        .select("*")
+        .order("start_date", { ascending: false });
+
+
+    if (error) throw error;
+
+
+    const personIds = (leaveData ?? [])
+      .map((l) => l.person_id)
+      .filter(Boolean);
+
+
+    let personsMap: Record<string, any> = {};
+
+
+    if (personIds.length) {
+
+      const { data: personsData } =
+        await supabase
+          .from("persons")
+          .select(
+            "id, full_name, military_number, formation"
+          )
+          .in("id", personIds);
+
+
+      (personsData ?? []).forEach((p) => {
+        personsMap[p.id] = p;
+      });
+
+    }
+
+
+    return (leaveData ?? []).map((l) => ({
+      ...l,
+      persons: l.person_id
+        ? personsMap[l.person_id] ?? null
+        : null,
+    }));
+
+  },
+});
 
   const matchesSearch = (p?: { full_name?: string | null; military_number?: string | null; formation?: string | null } | null) => {
     if (!search) return true;
