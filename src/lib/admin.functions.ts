@@ -100,10 +100,20 @@ export const createUser = createServerFn({ method: "POST" })
       await supabaseAdmin.from("profiles").update({ assigned_formation: data.assigned_formation }).eq("user_id", uid);
     }
     if (data.permissions.length > 0) {
-      await supabaseAdmin.from("permissions").insert(data.permissions.map((p) => ({ ...p, user_id: uid })));
+  const { error: permissionsError } = await supabaseAdmin
+    .from("permissions")
+    .insert(
+      data.permissions.map((p) => ({
+        ...p,
+        user_id: uid,
+      }))
+    );
+
+  if (permissionsError) {
+    console.error("Permissions insert error:", permissionsError);
+    throw new Error(`فشل حفظ الصلاحيات: ${permissionsError.message}`);
+  }
     }
-    return { ok: true, user_id: uid };
-  });
 
 export const listUsers = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
@@ -150,10 +160,31 @@ export const updateUserPermissions = createServerFn({ method: "POST" })
       await supabaseAdmin.from("profiles").update({ assigned_formation: data.assigned_formation }).eq("user_id", data.user_id);
     }
 
-    await supabaseAdmin.from("permissions").delete().eq("user_id", data.user_id);
-    if (data.permissions.length > 0) {
-      await supabaseAdmin.from("permissions").insert(data.permissions.map((p) => ({ ...p, user_id: data.user_id })));
-    }
+     const { error: deleteError } = await supabaseAdmin
+  .from("permissions")
+  .delete()
+  .eq("user_id", data.user_id);
+
+if (deleteError) {
+  console.error("Permissions delete error:", deleteError);
+  throw new Error(`فشل حذف الصلاحيات القديمة: ${deleteError.message}`);
+}
+
+if (data.permissions.length > 0) {
+  const { error: insertError } = await supabaseAdmin
+    .from("permissions")
+    .insert(
+      data.permissions.map((p) => ({
+        ...p,
+        user_id: data.user_id,
+      }))
+    );
+
+  if (insertError) {
+    console.error("Permissions insert error:", insertError);
+    throw new Error(`فشل حفظ الصلاحيات الجديدة: ${insertError.message}`);
+  }
+}
     return { ok: true };
   });
 
