@@ -134,11 +134,13 @@ function ServicesPage() {
 
   const approveMut = useMutation({
     mutationFn: async (s: ServiceRow) => {
-      const { error } = await supabase.from("services")
-        .update({ approved_at: new Date().toISOString(), approved_by: user?.id }).eq("id", s.id);
-      if (error) throw error;
-      await supabase.from("audit_log").insert({ user_id: user?.id, action: "approve", entity: "services", entity_id: s.id });
-    },
+      const { error } = await supabase
+  .from("services")
+  .update({
+    approved_at: new Date().toISOString(),
+    approved_by: user?.id ?? null,
+  })
+  .eq("id", s.id);
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["services"] }); toast.success("تم الاعتماد"); },
     onError: (e: Error) => toast.error(e.message),
   });
