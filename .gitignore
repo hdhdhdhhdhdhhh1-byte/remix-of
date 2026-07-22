@@ -32,7 +32,6 @@ dist-ssr
 *.sw?
 
 # Local env & Lovable-managed Supabase
-.env.local
 .lovable/
 supabase/
 bun.lockb
