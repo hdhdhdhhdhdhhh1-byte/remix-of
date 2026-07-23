@@ -219,7 +219,7 @@ course: acc.course + s.c.course,
 const approved = !!report?.approved_at;
 const dateObj = new Date(reportDate);
 const weekday = ARABIC_WEEKDAYS[dateObj.getDay()];
-const arDate = ${dateObj.getFullYear()}/${dateObj.getMonth() + 1}/${dateObj.getDate()};
+const arDate = `${dateObj.getFullYear()}/${dateObj.getMonth() + 1}/${dateObj.getDate()}`;
 
 return (
 
@@ -235,11 +235,18 @@ return (
 <Button variant="outline" size="sm" onClick={() => printRef.current && printElement(printRef.current)}>
 طباعة
 
-<Button variant="outline" size="sm" onClick={() => printRef.current && exportElementAsPDF(printRef.current, يومية-${reportDate})}>
-PDF
+<Button
+  variant="outline"
+  size="sm"
+  onClick={() =>
+    printRef.current &&
+    exportElementAsPDF(printRef.current, `يومية-${reportDate}`)
+  }
+>
+  PDF
+</Button>
 
-{/* ================= Data entry (screen only) ================= /} 
-
+{/* ================= Data entry (screen only) ================= */}
 {PRINT_ROWS.map((f) => { const list = byFormation[f] ?? []; if (list.length === 0) return null; const c = countsFor(list); return ( {f} 
 
 القوة: {c.total} موجود: {c.present} إجازة: {c.leave} إذن: {c.permit} غياب: {c.absent} مستشفى: {c.sick} دورة: {c.course} 
@@ -256,7 +263,7 @@ PDF
 
 )} 
 
-{/ ================= Official print block ================= /} <div ref={printRef} dir="rtl" className="official-report bg-white text-black mx-auto" style={{ width: "210mm", minHeight: "297mm", padding: "12mm 14mm", fontFamily: "'Cairo', 'Tahoma', sans-serif" }}> {/ Header /} 
+{/* ================= Official print block ================= */} <div ref={printRef} dir="rtl" className="official-report bg-white text-black mx-auto" style={{ width: "210mm", minHeight: "297mm", padding: "12mm 14mm", fontFamily: "'Cairo', 'Tahoma', sans-serif" }}> {/ Header /} 
 
 {/ Left: date/day /} 
 
