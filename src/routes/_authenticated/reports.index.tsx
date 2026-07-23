@@ -72,19 +72,47 @@ function ReportsPage() {
   });
 
   useEffect(() => {
-    if (report && "report_entries" in report) {
-      const map: Record<string, { status: AttendanceStatus; note: string }> = {};
-      const ents = (report.report_entries ?? []) as { person_id: string; status: AttendanceStatus; note: string | null }[];
-      ents.forEach((e) => { map[e.person_id] = { status: e.status, note: e.note ?? "" }; });
-      setEntries(map);
-      setNotes((report as { notes?: string | null }).notes ?? "");
-    } else {
-      const def: Record<string, { status: AttendanceStatus; note: string }> = {};
-      persons.forEach((p) => { def[p.id] = { status: "present", note: "" }; });
-      setEntries(def);
-      setNotes("");
-    }
-  }, [report, persons]);
+  if (report && "report_entries" in report) {
+
+    const map: Record<string, { status: AttendanceStatus; note: string }> = {};
+
+    const ents = (report.report_entries ?? []) as {
+      person_id: string;
+      status: AttendanceStatus;
+      note: string | null;
+    }[];
+
+    ents.forEach((e) => {
+      map[e.person_id] = {
+        status: e.status,
+        note: e.note ?? "",
+      };
+    });
+
+    setEntries(map);
+    setNotes((report as { notes?: string | null }).notes ?? "");
+
+  } else {
+
+    const map: Record<string, { status: AttendanceStatus; note: string }> = {};
+
+    persons.forEach((p) => {
+
+      map[p.id] = {
+        status: prevMap[p.id] ?? "present",
+        note: "",
+      };
+
+    });
+
+    setEntries(map);
+
+    // لا ننقل ملاحظات اليوم السابق
+    setNotes("");
+
+  }
+
+}, [report, persons, prevMap]);
 
   const byFormation = useMemo(() => {
     const map: Record<string, Person[]> = {};
