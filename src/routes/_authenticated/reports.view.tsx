@@ -299,7 +299,7 @@ function ReportsViewPage() {
   minHeight: "297mm",
   padding: "12mm 14mm",
   fontFamily: "'Cairo', 'Tahoma', sans-serif"
-}}
+}}>
               <div className="flex items-start justify-between gap-4">
                 <div className="text-sm leading-8 min-w-[110px]">
                   <div>التاريخ: <strong>{arDate}</strong> م</div>
