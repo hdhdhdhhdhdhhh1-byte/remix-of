@@ -373,7 +373,13 @@ function ReportsPage() {
       </div>
 
       {/* ================= Official print block ================= */}
-      <div ref={printRef} dir="rtl" className="official-report bg-white text-black mx-auto" style={{ width: "210mm", minHeight: "297mm", padding: "12mm 14mm", fontFamily: "'Cairo', 'Tahoma', sans-serif" }}>
+      <div ref={printRef} dir="rtl" className="official-report bg-white text-black mx-auto" style={{
+  width: "100%",
+  maxWidth: "210mm",
+  minHeight: "297mm",
+  padding: "12mm 14mm",
+  fontFamily: "'Cairo', 'Tahoma', sans-serif"
+}}
         {/* Header */}
         <div className="flex items-start justify-between gap-4">
           {/* Left: date/day */}
