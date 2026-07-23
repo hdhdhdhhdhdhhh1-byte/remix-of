@@ -404,10 +404,35 @@ function ReportsViewPage() {
 
       <style>{`
         @media print {
-          @page { size: A4; margin: 10mm; }
-          body * { visibility: hidden; }
-          .official-report, .official-report * { visibility: visible; }
-          .official-report { position: absolute; inset: 0; margin: 0 auto; }
+
+  @page {
+    size:A4;
+    margin:10mm;
+  }
+
+  body * {
+    visibility:hidden;
+  }
+
+  .official-report,
+  .official-report * {
+    visibility:visible;
+  }
+
+
+  .official-report {
+
+    position:relative !important;
+    width:210mm !important;
+    min-height:297mm !important;
+
+    margin:0 !important;
+
+    direction:rtl;
+
+  }
+
+}
         }
         .official-report th, .official-report td {
           border: 1px solid #000; padding: 6px 8px;
