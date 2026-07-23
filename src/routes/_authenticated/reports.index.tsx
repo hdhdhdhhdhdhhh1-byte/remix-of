@@ -379,7 +379,7 @@ function ReportsPage() {
   minHeight: "297mm",
   padding: "12mm 14mm",
   fontFamily: "'Cairo', 'Tahoma', sans-serif"
-}}
+}}>
         {/* Header */}
         <div className="flex items-start justify-between gap-4">
           {/* Left: date/day */}
