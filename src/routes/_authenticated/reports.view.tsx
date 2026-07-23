@@ -293,7 +293,13 @@ function ReportsViewPage() {
 
             {/* Printable block */}
             <div ref={printRef} dir="rtl" className="official-report bg-white text-black mx-auto"
-              style={{ width: "210mm", minHeight: "297mm", padding: "12mm 14mm", fontFamily: "'Cairo', 'Tahoma', sans-serif" }}>
+              style={{
+  width: "100%",
+  maxWidth: "210mm",
+  minHeight: "297mm",
+  padding: "12mm 14mm",
+  fontFamily: "'Cairo', 'Tahoma', sans-serif"
+}}
               <div className="flex items-start justify-between gap-4">
                 <div className="text-sm leading-8 min-w-[110px]">
                   <div>التاريخ: <strong>{arDate}</strong> م</div>
