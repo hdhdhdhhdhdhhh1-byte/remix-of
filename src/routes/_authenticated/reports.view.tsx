@@ -1,14 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from "@/components/ui/table";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -49,7 +45,25 @@ function ReportsViewPage() {
   const canView = isAdmin || can("reports_view", "view");
   const qc = useQueryClient();
   const printRef = useRef<HTMLDivElement>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(1);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const updateScale = () => {
+      if (!wrapperRef.current) return;
+      const containerWidth = wrapperRef.current.clientWidth - 16;
+      const reportWidth = 794;
+      if (containerWidth < reportWidth) {
+        setScale(containerWidth / reportWidth);
+      } else {
+        setScale(1);
+      }
+    };
+    updateScale();
+    window.addEventListener("resize", updateScale);
+    return () => window.removeEventListener("resize", updateScale);
+  }, []);
 
   const { data: reports = [] } = useQuery({
     queryKey: ["reports-list-approved"],
@@ -102,7 +116,7 @@ function ReportsViewPage() {
     queryFn: async () => {
       const { data: prev } = await supabase
         .from("daily_reports")
-        .select("id, report_entries(person_id, status)")
+        .select("id, report_date, report_entries(person_id, status)")
         .lt("report_date", selected!.report_date)
         .order("report_date", { ascending: false })
         .limit(1)
@@ -148,15 +162,17 @@ function ReportsViewPage() {
 
   const changes = useMemo(() => {
     if (!selected) return null;
-if (prevEntries.length === 0) return { newLeave: [], returned: [], newAbsent: [], newSick: [], newPermit: [], newCourse: [] };
+    if (prevEntries.length === 0) {
+      return { newLeave: [] as Person[], returned: [] as Person[], newAbsent: [] as Person[], newSick: [] as Person[], newPermit: [] as Person[], newCourse: [] as Person[] };
+    }
     const newLeave: Person[] = [], returned: Person[] = [], newAbsent: Person[] = [],
       newSick: Person[] = [], newPermit: Person[] = [], newCourse: Person[] = [];
     persons.forEach((p) => {
       const now = entryMap[p.id]?.status;
       const before = prevMap[p.id];
-      if (!now) return;
+      if (!now || !before) return;
       if (now === "leave" && before !== "leave") newLeave.push(p);
-      if (before && before !== "present" && now === "present") returned.push(p);
+      if (before !== "present" && now === "present") returned.push(p);
       if ((now === "absent" || now === "mission" || now === "other") &&
           !(before === "absent" || before === "mission" || before === "other")) newAbsent.push(p);
       if (now === "sick" && before !== "sick") newSick.push(p);
@@ -190,7 +206,7 @@ if (prevEntries.length === 0) return { newLeave: [], returned: [], newAbsent: []
       });
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["reports-list"] });
+      qc.invalidateQueries({ queryKey: ["reports-list-approved"] });
       qc.invalidateQueries({ queryKey: ["report"] });
       toast.success("تم إلغاء اعتماد التقرير");
     },
@@ -203,46 +219,29 @@ if (prevEntries.length === 0) return { newLeave: [], returned: [], newAbsent: []
 
   const dateObj = selected ? new Date(selected.report_date) : null;
   const weekday = dateObj ? ARABIC_WEEKDAYS[dateObj.getDay()] : "";
-  const arDate = dateObj
-    ? `${dateObj.getFullYear()}/${dateObj.getMonth() + 1}/${dateObj.getDate()}`
-    : "";
+  const arDate = dateObj ? `${dateObj.getFullYear()}/${dateObj.getMonth() + 1}/${dateObj.getDate()}` : "";
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-4">
-      <Card className="print:hidden">
-        <CardHeader>
-          <CardTitle className="text-base">التقارير المحفوظة</CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          <div className="max-h-[70vh] overflow-y-auto">
-            {reports.length === 0 && (
-              <div className="p-4 text-sm text-muted-foreground text-center">لا توجد تقارير</div>
-            )}
-            {reports.map((r) => {
-              const isActive = selected?.id === r.id;
-              return (
-                <button
-                  key={r.id}
-                  onClick={() => setSelectedId(r.id)}
-                  className={`w-full text-right px-4 py-3 border-b hover:bg-muted transition-colors flex items-center justify-between gap-2 ${
-                    isActive ? "bg-muted" : ""
-                  }`}
-                >
-                  <div className="flex items-center gap-2">
-                    <FileText className="h-4 w-4 text-muted-foreground" />
-                    <span className="font-medium text-sm">{r.report_date}</span>
-                  </div>
-                  {r.approved_at ? (
-                    <Badge variant="default" className="bg-emerald-600 hover:bg-emerald-600">معتمد</Badge>
-                  ) : (
-                    <Badge variant="secondary">مسودة</Badge>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </CardContent>
-      </Card>
+      <div className="print:hidden border rounded-lg bg-card">
+        <div className="p-4 border-b"><h3 className="font-bold text-base">التقارير المحفوظة</h3></div>
+        <div className="max-h-[70vh] overflow-y-auto">
+          {reports.length === 0 && <div className="p-4 text-sm text-muted-foreground text-center">لا توجد تقارير</div>}
+          {reports.map((r) => {
+            const isActive = selected?.id === r.id;
+            return (
+              <button key={r.id} onClick={() => setSelectedId(r.id)}
+                className={`w-full text-right px-4 py-3 border-b hover:bg-muted transition-colors flex items-center justify-between gap-2 ${isActive ? "bg-muted" : ""}`}>
+                <div className="flex items-center gap-2">
+                  <FileText className="h-4 w-4 text-muted-foreground" />
+                  <span className="font-medium text-sm">{r.report_date}</span>
+                </div>
+                {r.approved_at ? <Badge className="bg-emerald-600">معتمد</Badge> : <Badge variant="secondary">مسودة</Badge>}
+              </button>
+            );
+          })}
+        </div>
+      </div>
 
       <div className="space-y-4">
         {selected ? (
@@ -250,169 +249,98 @@ if (prevEntries.length === 0) return { newLeave: [], returned: [], newAbsent: []
             <div className="flex flex-wrap gap-2 items-center justify-between print:hidden">
               <div className="flex items-center gap-2 flex-wrap">
                 <h2 className="text-lg font-bold">تقرير {selected.report_date}</h2>
-                {selected.approved_at ? (
-                  <Badge className="bg-emerald-600 hover:bg-emerald-600">
-                    <CheckCircle2 className="h-3 w-3 ml-1" /> معتمد
-                  </Badge>
-                ) : (
-                  <Badge variant="secondary">مسودة</Badge>
-                )}
-                {selected.edited_after_approval && (
-                  <Badge variant="destructive">تم التعديل بعد الاعتماد</Badge>
-                )}
+                {selected.approved_at ? <Badge className="bg-emerald-600"><CheckCircle2 className="h-3 w-3 ml-1" /> معتمد</Badge> : <Badge variant="secondary">مسودة</Badge>}
+                {selected.edited_after_approval && <Badge variant="destructive">تم التعديل بعد الاعتماد</Badge>}
               </div>
               <div className="flex gap-2 flex-wrap">
-                <Button variant="outline" size="sm" onClick={() => printRef.current && printElement(printRef.current)}>
-                  <Printer className="h-4 w-4 ml-1" /> طباعة
-                </Button>
-                <Button variant="outline" size="sm" onClick={() => printRef.current && exportElementAsPDF(printRef.current, `يومية-${selected.report_date}`)}>
-                  <FileDown className="h-4 w-4 ml-1" /> PDF
-                </Button>
+                <Button variant="outline" size="sm" onClick={() => printRef.current && printElement(printRef.current)}><Printer className="h-4 w-4 ml-1" /> طباعة</Button>
+                <Button variant="outline" size="sm" onClick={() => printRef.current && exportElementAsPDF(printRef.current, `يومية-${selected.report_date}`)}><FileDown className="h-4 w-4 ml-1" /> PDF</Button>
                 {selected.approved_at && canCancelApproval && (
                   <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button variant="destructive" size="sm">
-                        <RotateCcw className="h-4 w-4 ml-1" /> إلغاء الاعتماد
-                      </Button>
-                    </AlertDialogTrigger>
+                    <AlertDialogTrigger asChild><Button variant="destructive" size="sm"><RotateCcw className="h-4 w-4 ml-1" /> إلغاء الاعتماد</Button></AlertDialogTrigger>
                     <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>تأكيد إلغاء الاعتماد</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          سيتم فتح التقرير للتعديل مرة أخرى. هل أنت متأكد؟
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>إلغاء</AlertDialogCancel>
-                        <AlertDialogAction onClick={() => cancelMut.mutate()}>تأكيد</AlertDialogAction>
-                      </AlertDialogFooter>
+                      <AlertDialogHeader><AlertDialogTitle>تأكيد إلغاء الاعتماد</AlertDialogTitle><AlertDialogDescription>سيتم فتح التقرير للتعديل مرة أخرى. هل أنت متأكد؟</AlertDialogDescription></AlertDialogHeader>
+                      <AlertDialogFooter><AlertDialogCancel>إلغاء</AlertDialogCancel><AlertDialogAction onClick={() => cancelMut.mutate()}>تأكيد</AlertDialogAction></AlertDialogFooter>
                     </AlertDialogContent>
                   </AlertDialog>
                 )}
               </div>
             </div>
 
-            {/* Printable block */}
-            <div ref={printRef} dir="rtl" className="official-report bg-white text-black mx-auto"
-              style={{ width: "210mm", minHeight: "297mm", padding: "12mm 14mm", fontFamily: "'Cairo', 'Tahoma', sans-serif" }}>
-              <div className="flex items-start justify-between gap-4">
-                <div className="text-sm leading-8 min-w-[110px]">
-                  <div>التاريخ: <strong>{arDate}</strong> م</div>
-                  <div>اليوم: <strong>{weekday}</strong></div>
+            {/* Responsive wrapper - mobile friendly */}
+            <div ref={wrapperRef} className="w-full flex justify-center bg-gray-100/50 rounded-xl p-2 md:p-4 overflow-hidden">
+              <div
+                style={{
+                  width: "794px",
+                  height: scale < 1 ? `${1123 * scale}px` : "auto",
+                  transform: `scale(${scale})`,
+                  transformOrigin: "top center",
+                  transition: "transform 0.2s ease",
+                }}
+              >
+                <div ref={printRef} dir="rtl" className="official-report bg-white text-black shadow-lg"
+                  style={{ width: "210mm", minHeight: "297mm", padding: "12mm 14mm", fontFamily: "'Cairo', 'Tahoma', sans-serif" }}>
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="text-sm leading-8 min-w-[110px]"><div>التاريخ: <strong>{arDate}</strong> م</div><div>اليوم: <strong>{weekday}</strong></div></div>
+                    <div className="flex-1 text-center"><div className="text-base font-bold mb-1">بسم الله الرحمن الرحيم</div><img src={logoUrl} alt="شعار" className="mx-auto" style={{ width: "90px", height: "90px", objectFit: "contain" }} /></div>
+                    <div className="text-sm leading-7 text-right min-w-[220px]"><div className="font-bold">قيادة قوات المقاومة الوطنية</div><div>حراس الجمهورية</div><div>قيادة لواء مدفعية المقاومة الوطنية</div><div>قيادة كتيبة الراجمات</div><div className="font-bold">مكتب البطارية الثانية</div></div>
+                  </div>
+
+                  <div className="text-center mt-4 mb-2"><h2 className="inline-block px-6 py-1 border-b-2 border-black text-lg font-bold">يومية البطارية الثانية راجمات</h2></div>
+
+                  <table className="w-full border-collapse text-sm mt-2" style={{ border: "1.5px solid #000" }}>
+                    <thead><tr className="bg-gray-100"><Th w="6%">م</Th><Th w="14%">الصنف</Th><Th>الإجازات</Th><Th>الأذونات</Th><Th>الغياب</Th><Th>المستشفى</Th><Th>الدورة</Th><Th>القوة</Th><Th>الموجود</Th></tr></thead>
+                    <tbody>
+                      {sectionTotals.map((s, i) => (
+                        <tr key={s.f}><Td center>{i + 1}</Td><Td center bold>{s.f}</Td><Td center>{s.c.leave || ""}</Td><Td center>{s.c.permit || ""}</Td><Td center>{s.c.absent || ""}</Td><Td center>{s.c.sick || ""}</Td><Td center>{s.c.course || ""}</Td><Td center bold>{s.c.total || ""}</Td><Td center bold>{s.c.present || ""}</Td></tr>
+                      ))}
+                      <tr className="bg-gray-100 font-bold"><Td center colSpan={2}>الإجمالي</Td><Td center>{grand.leave || 0}</Td><Td center>{grand.permit || 0}</Td><Td center>{grand.absent || 0}</Td><Td center>{grand.sick || 0}</Td><Td center>{grand.course || 0}</Td><Td center>{grand.total || 0}</Td><Td center>{grand.present || 0}</Td></tr>
+                    </tbody>
+                  </table>
+
+                  <div className="mt-6">
+                    <div className="text-center font-bold mb-2 text-base">التغيرات (لهذا اليوم فقط)</div>
+                    <table className="w-full border-collapse text-sm" style={{ border: "1.5px solid #000" }}>
+                      <thead><tr className="bg-gray-100"><Th w="18%">التغير</Th><Th>الاسم</Th><Th w="14%">الرتبة</Th><Th w="12%">الوحدة</Th><Th w="22%">ملاحظات</Th></tr></thead>
+                      <tbody>
+                        {renderChangeRows("خروج إجازة", changes?.newLeave ?? [], entryMap)}
+                        {renderChangeRows("عودة", changes?.returned ?? [], entryMap)}
+                        {renderChangeRows("غياب جديد", changes?.newAbsent ?? [], entryMap)}
+                        {renderChangeRows("مريض جديد", changes?.newSick ?? [], entryMap)}
+                        {renderChangeRows("إذن", changes?.newPermit ?? [], entryMap)}
+                        {renderChangeRows("دورة", changes?.newCourse ?? [], entryMap)}
+                        {(changes && Object.values(changes).every(a => a.length === 0)) && <tr><Td center colSpan={5}>لا توجد تغيرات عن اليوم السابق</Td></tr>}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {selected.notes && <div className="mt-4 text-sm"><strong>ملاحظات: </strong>{selected.notes}</div>}
+
+                  <div className="grid grid-cols-2 gap-8 mt-16 text-sm text-center"><div><div className="border-t border-black pt-1">أركان حرب البطارية</div></div><div><div className="border-t border-black pt-1">قائد البطارية</div></div></div>
                 </div>
-                <div className="flex-1 text-center">
-                  <div className="text-base font-bold mb-1">بسم الله الرحمن الرحيم</div>
-                  <img src={logoUrl} alt="شعار" className="mx-auto" style={{ width: "90px", height: "90px", objectFit: "contain" }} />
-                </div>
-                <div className="text-sm leading-7 text-right min-w-[220px]">
-                  <div className="font-bold">قيادة قوات المقاومة الوطنية</div>
-                  <div>حراس الجمهورية</div>
-                  <div>قيادة لواء مدفعية المقاومة الوطنية</div>
-                  <div>قيادة كتيبة الراجمات</div>
-                  <div className="font-bold">مكتب البطارية الثانية</div>
-                </div>
-              </div>
-
-              <div className="text-center mt-4 mb-2">
-                <h2 className="inline-block px-6 py-1 border-b-2 border-black text-lg font-bold">
-                  يومية البطارية الثانية راجمات
-                </h2>
-              </div>
-
-              <table className="w-full border-collapse text-sm mt-2" style={{ border: "1.5px solid #000" }}>
-                <thead>
-                  <tr className="bg-gray-100">
-                    <Th w="6%">م</Th><Th w="14%">الصنف</Th>
-                    <Th>الإجازات</Th><Th>الأذونات</Th><Th>الغياب</Th>
-                    <Th>المستشفى</Th><Th>الدورة</Th><Th>القوة</Th><Th>الموجود</Th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {sectionTotals.map((s, i) => (
-                    <tr key={s.f}>
-                      <Td center>{i + 1}</Td>
-                      <Td center bold>{s.f}</Td>
-                      <Td center>{s.c.leave || ""}</Td>
-                      <Td center>{s.c.permit || ""}</Td>
-                      <Td center>{s.c.absent || ""}</Td>
-                      <Td center>{s.c.sick || ""}</Td>
-                      <Td center>{s.c.course || ""}</Td>
-                      <Td center bold>{s.c.total || ""}</Td>
-                      <Td center bold>{s.c.present || ""}</Td>
-                    </tr>
-                  ))}
-                  <tr className="bg-gray-100 font-bold">
-                    <Td center colSpan={2}>الإجمالي</Td>
-                    <Td center>{grand.leave || 0}</Td>
-                    <Td center>{grand.permit || 0}</Td>
-                    <Td center>{grand.absent || 0}</Td>
-                    <Td center>{grand.sick || 0}</Td>
-                    <Td center>{grand.course || 0}</Td>
-                    <Td center>{grand.total || 0}</Td>
-                    <Td center>{grand.present || 0}</Td>
-                  </tr>
-                </tbody>
-              </table>
-
-              <div className="mt-6">
-                <div className="text-center font-bold mb-2 text-base">التغيرات (لهذا اليوم فقط)</div>
-                <table className="w-full border-collapse text-sm" style={{ border: "1.5px solid #000" }}>
-                  <thead>
-                    <tr className="bg-gray-100">
-                      <Th w="18%">التغير</Th>
-                      <Th>الاسم</Th>
-                      <Th w="14%">الرتبة</Th>
-                      <Th w="12%">الوحدة</Th>
-                      <Th w="22%">ملاحظات</Th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {renderChangeRows("خروج إجازة", changes?.newLeave ?? [], entryMap)}
-                    {renderChangeRows("عودة", changes?.returned ?? [], entryMap)}
-                    {renderChangeRows("غياب جديد", changes?.newAbsent ?? [], entryMap)}
-                    {renderChangeRows("مريض جديد", changes?.newSick ?? [], entryMap)}
-                    {renderChangeRows("إذن", changes?.newPermit ?? [], entryMap)}
-                    {renderChangeRows("دورة", changes?.newCourse ?? [], entryMap)}
-                    {(!changes ||
-                      (changes.newLeave.length + changes.returned.length + changes.newAbsent.length +
-                        changes.newSick.length + changes.newPermit.length + changes.newCourse.length === 0)) && (
-                      <tr><Td center colSpan={5}>لا توجد تغيرات</Td></tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-
-              {selected.notes && (
-                <div className="mt-4 text-sm">
-                  <strong>ملاحظات: </strong>{selected.notes}
-                </div>
-              )}
-
-              <div className="grid grid-cols-2 gap-8 mt-16 text-sm text-center">
-                <div><div className="border-t border-black pt-1">أركان حرب البطارية</div></div>
-                <div><div className="border-t border-black pt-1">قائد البطارية</div></div>
               </div>
             </div>
           </>
         ) : (
-          <Card>
-            <CardContent className="p-8 text-center text-muted-foreground">
-              اختر تقريراً من القائمة لعرضه
-            </CardContent>
-          </Card>
+          <div className="p-8 text-center text-muted-foreground border rounded-lg">اختر تقريراً من القائمة لعرضه</div>
         )}
       </div>
 
       <style>{`
         @media print {
           @page { size: A4; margin: 10mm; }
-          body * { visibility: hidden; }
-          .official-report, .official-report * { visibility: visible; }
-          .official-report { position: absolute; inset: 0; margin: 0 auto; }
+          body * { visibility: hidden !important; }
+          .official-report, .official-report * { visibility: visible !important; }
+          .official-report { 
+            position: absolute !important; 
+            inset: 0 !important; 
+            margin: 0 auto !important;
+            transform: none !important;
+            width: 210mm !important;
+            box-shadow: none !important;
+          }
         }
-        .official-report th, .official-report td {
-          border: 1px solid #000; padding: 6px 8px;
-        }
+        .official-report th, .official-report td { border: 1px solid #000; padding: 6px 8px; }
       `}</style>
     </div>
   );
@@ -425,19 +353,12 @@ function Td({ children, center, bold, colSpan }: { children?: React.ReactNode; c
   return <td colSpan={colSpan} style={{ textAlign: center ? "center" : "right", fontWeight: bold ? 700 : 400 }}>{children}</td>;
 }
 
-function renderChangeRows(
-  label: string,
-  list: Person[],
-  entryMap: Record<string, Entry>,
-) {
+function renderChangeRows(label: string, list: Person[], entryMap: Record<string, Entry>) {
   if (list.length === 0) return null;
   return list.map((p) => (
     <tr key={label + p.id}>
-      <Td center bold>{label}</Td>
-      <Td>{p.full_name}</Td>
-      <Td center>{p.military_rank ?? "-"}</Td>
-      <Td center>{p.formation ?? "-"}</Td>
-      <Td>{entryMap[p.id]?.note ?? ""}</Td>
+      <Td center bold>{label}</Td><Td>{p.full_name}</Td><Td center>{p.military_rank ?? "-"}</Td><Td center>{p.formation ?? "-"}</Td><Td>{entryMap[p.id]?.note ?? ""}</Td>
     </tr>
   ));
-          }
+}
+
