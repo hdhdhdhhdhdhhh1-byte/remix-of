@@ -139,10 +139,9 @@ function LeavesPage() {
 
 
 
-      const personIds =
-        (leaveData ?? [])
-          .map((x) => x.person_id)
-          .filter(Boolean);
+      const personIds = data
+  .map((x) => x.person_id)
+  .filter((id): id is string => !!id);
 
 
 
