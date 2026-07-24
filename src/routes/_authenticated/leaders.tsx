@@ -67,8 +67,8 @@ function LeadersPage() {
           person_id,
           position,
           unit: unit || null,
-          full_name: selected?.full_name ?? null,
-          military_rank: selected?.military_rank ?? null,
+          full_name: selected?.full_name ?? "",
+military_rank: selected?.military_rank ?? "",
         });
 
       if (error) throw error;
