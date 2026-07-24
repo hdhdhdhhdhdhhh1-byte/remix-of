@@ -30,10 +30,29 @@ function ReportsPage() {
   const canApprove = isAdmin || can("reports_entry", "approve");
   const qc = useQueryClient();
   const printRef = useRef<HTMLDivElement>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(1);
 
   const [reportDate, setReportDate] = useState(new Date().toISOString().slice(0, 10));
   const [entries, setEntries] = useState<Record<string, { status: AttendanceStatus; note: string }>>({});
   const [notes, setNotes] = useState("");
+
+  // Responsive scaling for mobile - keep design 100% same
+  useEffect(() => {
+    const updateScale = () => {
+      if (!wrapperRef.current) return;
+      const containerWidth = wrapperRef.current.clientWidth - 16; // padding
+      const reportWidth = 794; // 210mm ~ 794px
+      if (containerWidth < reportWidth) {
+        setScale(containerWidth / reportWidth);
+      } else {
+        setScale(1);
+      }
+    };
+    updateScale();
+    window.addEventListener("resize", updateScale);
+    return () => window.removeEventListener("resize", updateScale);
+  }, []);
 
   const { data: persons = [] } = useQuery({
     queryKey: ["persons-active"],
@@ -55,7 +74,6 @@ function ReportsPage() {
     },
   });
 
-  // FIX 1: جلب آخر تقرير قبل هذا التاريخ سواء معتمد أو لا
   const { data: prevReport } = useQuery({
     queryKey: ["prev-report", reportDate],
     queryFn: async () => {
@@ -68,7 +86,6 @@ function ReportsPage() {
     },
   });
 
-  // FIX 2: خريطة آخر تقرير - تعريفها قبل الـ useEffect
   const prevMap = useMemo(() => {
     const m: Record<string, AttendanceStatus> = {};
     if (prevReport) {
@@ -78,9 +95,7 @@ function ReportsPage() {
     return m;
   }, [prevReport]);
 
-  // FIX 3: المنطق الجديد للتعبئة
   useEffect(() => {
-    // لو فيه تقرير محفوظ لنفس اليوم -> اعرضه
     if (report && "report_entries" in report) {
       const map: Record<string, { status: AttendanceStatus; note: string }> = {};
       const ents = (report.report_entries ?? []) as { person_id: string; status: AttendanceStatus; note: string | null }[];
@@ -88,17 +103,15 @@ function ReportsPage() {
       setEntries(map);
       setNotes((report as { notes?: string | null }).notes ?? "");
     } else if (persons.length > 0) {
-      // FIX: يوم جديد بدون تقرير -> انسخ من آخر تقرير (الإحصائي يبقى)
-      // والمتغيرات (notes) تكون فاضية
       const def: Record<string, { status: AttendanceStatus; note: string }> = {};
       persons.forEach((p) => {
         def[p.id] = {
-          status: prevMap[p.id] ?? "present", // يبقى كما كان في آخر تقرير
-          note: "", // المتغيرات فاضية
+          status: prevMap[p.id] ?? "present",
+          note: "",
         };
       });
       setEntries(def);
-      setNotes(""); // المتغيرات فاضية لليوم الجديد
+      setNotes("");
     }
   }, [report, persons, prevMap, reportDate]);
 
@@ -187,16 +200,14 @@ function ReportsPage() {
     onError: (e: Error) => toast.error("خطأ: " + e.message),
   });
 
-  // FIX 4: المتغيرات - تشتغل حتى لو التقرير لسه ما انحفظ لليوم الجديد
   const changes = useMemo(() => {
-    if (!prevReport) return null; // أول تقرير في النظام
+    if (!prevReport) return null;
     const newLeave: Person[] = [], returned: Person[] = [], newAbsent: Person[] = [],
       newSick: Person[] = [], newPermit: Person[] = [], newCourse: Person[] = [];
     persons.forEach((p) => {
       const now = entries[p.id]?.status;
       const before = prevMap[p.id];
       if (!now) return;
-      // لو مافي قبل (فرد جديد) اعتبره موجود
       if (!before) return;
       if (now === "leave" && before !== "leave") newLeave.push(p);
       if (before !== "present" && now === "present") returned.push(p);
@@ -233,7 +244,7 @@ function ReportsPage() {
       <div className="flex items-center justify-between flex-wrap gap-4 print:hidden">
         <div>
           <h1 className="text-2xl md:text-3xl font-bold">التقرير اليومي</h1>
-          <p className="text-muted-foreground text-sm mt-1">الإحصائي يُنسخ من آخر تقرير - المتغيرات فاضية كل يوم جديد</p>
+          <p className="text-muted-foreground text-sm mt-1">الإحصائي من آخر تقرير - المتغيرات فاضية</p>
         </div>
         <div className="flex items-end gap-2 flex-wrap">
           <div>
@@ -326,7 +337,7 @@ function ReportsPage() {
         <Card>
           <CardContent className="pt-6">
             <Label>ملاحظات التقرير (المتغيرات)</Label>
-            <Input value={notes} onChange={(e) => setNotes(e.target.value)} disabled={!canEdit || approved} placeholder="فارغ كل يوم جديد - اكتب التعظيل الجديد هنا" />
+            <Input value={notes} onChange={(e) => setNotes(e.target.value)} disabled={!canEdit || approved} placeholder="فارغ كل يوم جديد" />
           </CardContent>
         </Card>
 
@@ -349,116 +360,137 @@ function ReportsPage() {
         )}
       </div>
 
-      <div ref={printRef} dir="rtl" className="official-report bg-white text-black mx-auto" style={{ width: "210mm", minHeight: "297mm", padding: "12mm 14mm", fontFamily: "'Cairo', 'Tahoma', sans-serif" }}>
-        <div className="flex items-start justify-between gap-4">
-          <div className="text-sm leading-8 min-w-[110px]">
-            <div>التاريخ: <strong>{arDate}</strong> م</div>
-            <div>اليوم: <strong>{weekday}</strong></div>
+      {/* ================= Official print block - RESPONSIVE FOR MOBILE ================= */}
+      <div ref={wrapperRef} className="w-full flex justify-center bg-gray-100/50 rounded-xl p-2 md:p-4 overflow-hidden">
+        <div
+          style={{
+            width: "794px",
+            height: scale < 1 ? `${1123 * scale}px` : "auto",
+            transform: `scale(${scale})`,
+            transformOrigin: "top center",
+            transition: "transform 0.2s ease",
+          }}
+        >
+          <div ref={printRef} dir="rtl" className="official-report bg-white text-black shadow-lg" style={{ width: "210mm", minHeight: "297mm", padding: "12mm 14mm", fontFamily: "'Cairo', 'Tahoma', sans-serif" }}>
+            {/* Header */}
+            <div className="flex items-start justify-between gap-4">
+              <div className="text-sm leading-8 min-w-[110px]">
+                <div>التاريخ: <strong>{arDate}</strong> م</div>
+                <div>اليوم: <strong>{weekday}</strong></div>
+              </div>
+              <div className="flex-1 text-center">
+                <div className="text-base font-bold mb-1">بسم الله الرحمن الرحيم</div>
+                <img src={logoUrl} alt="شعار المقاومة الوطنية" className="mx-auto" style={{ width: "90px", height: "90px", objectFit: "contain" }} />
+              </div>
+              <div className="text-sm leading-7 text-right min-w-[220px]">
+                <div className="font-bold">قيادة قوات المقاومة الوطنية</div>
+                <div>حراس الجمهورية</div>
+                <div>قيادة لواء مدفعية المقاومة الوطنية</div>
+                <div>قيادة كتيبة الراجمات</div>
+                <div className="font-bold">مكتب البطارية الثانية</div>
+              </div>
+            </div>
+
+            <div className="text-center mt-4 mb-2">
+              <h2 className="inline-block px-6 py-1 border-b-2 border-black text-lg font-bold">يومية البطارية الثانية راجمات</h2>
+            </div>
+
+            <table className="w-full border-collapse text-sm mt-2" style={{ border: "1.5px solid #000" }}>
+              <thead>
+                <tr className="bg-gray-100">
+                  <Th w="6%">م</Th>
+                  <Th w="14%">الصنف</Th>
+                  <Th>الإجازات</Th>
+                  <Th>الأذونات</Th>
+                  <Th>الغياب</Th>
+                  <Th>المستشفى</Th>
+                  <Th>الدورة</Th>
+                  <Th>القوة</Th>
+                  <Th>الموجود</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {sectionTotals.map((s, i) => (
+                  <tr key={s.f}>
+                    <Td center>{i + 1}</Td>
+                    <Td center bold>{s.f}</Td>
+                    <Td center>{s.c.leave || ""}</Td>
+                    <Td center>{s.c.permit || ""}</Td>
+                    <Td center>{s.c.absent || ""}</Td>
+                    <Td center>{s.c.sick || ""}</Td>
+                    <Td center>{s.c.course || ""}</Td>
+                    <Td center bold>{s.c.total || ""}</Td>
+                    <Td center bold>{s.c.present || ""}</Td>
+                  </tr>
+                ))}
+                <tr className="bg-gray-100 font-bold">
+                  <Td center colSpan={2}>الإجمالي</Td>
+                  <Td center>{grand.leave || 0}</Td>
+                  <Td center>{grand.permit || 0}</Td>
+                  <Td center>{grand.absent || 0}</Td>
+                  <Td center>{grand.sick || 0}</Td>
+                  <Td center>{grand.course || 0}</Td>
+                  <Td center>{grand.total || 0}</Td>
+                  <Td center>{grand.present || 0}</Td>
+                </tr>
+              </tbody>
+            </table>
+
+            <div className="mt-6">
+              <div className="text-center font-bold mb-2 text-base">التغيرات</div>
+              <table className="w-full border-collapse text-sm" style={{ border: "1.5px solid #000" }}>
+                <thead>
+                  <tr className="bg-gray-100">
+                    <Th w="18%">التغير</Th>
+                    <Th>الاسم</Th>
+                    <Th w="14%">الرتبة</Th>
+                    <Th w="12%">الوحدة</Th>
+                    <Th w="22%">ملاحظات</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {renderChangeRows("خروج إجازة", changes?.newLeave ?? [], entries)}
+                  {renderChangeRows("عودة", changes?.returned ?? [], entries)}
+                  {renderChangeRows("غياب جديد", changes?.newAbsent ?? [], entries)}
+                  {renderChangeRows("مريض جديد", changes?.newSick ?? [], entries)}
+                  {renderChangeRows("إذن", changes?.newPermit ?? [], entries)}
+                  {renderChangeRows("دورة", changes?.newCourse ?? [], entries)}
+                  {(!changes ||
+                    (changes.newLeave.length + changes.returned.length + changes.newAbsent.length +
+                     changes.newSick.length + changes.newPermit.length + changes.newCourse.length === 0)) && (
+                    <tr><Td center colSpan={5}>{prevReport ? "لا توجد تغيرات عن أمس" : "أول تقرير - لا يوجد سابق للمقارنة"}</Td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {notes && (
+              <div className="mt-4 text-sm">
+                <strong>ملاحظات: </strong>{notes}
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-8 mt-16 text-sm text-center">
+              <div><div className="border-t border-black pt-1">أركان حرب البطارية</div></div>
+              <div><div className="border-t border-black pt-1">قائد البطارية</div></div>
+            </div>
           </div>
-          <div className="flex-1 text-center">
-            <div className="text-base font-bold mb-1">بسم الله الرحمن الرحيم</div>
-            <img src={logoUrl} alt="شعار المقاومة الوطنية" className="mx-auto" style={{ width: "90px", height: "90px", objectFit: "contain" }} />
-          </div>
-          <div className="text-sm leading-7 text-right min-w-[220px]">
-            <div className="font-bold">قيادة قوات المقاومة الوطنية</div>
-            <div>حراس الجمهورية</div>
-            <div>قيادة لواء مدفعية المقاومة الوطنية</div>
-            <div>قيادة كتيبة الراجمات</div>
-            <div className="font-bold">مكتب البطارية الثانية</div>
-          </div>
-        </div>
-
-        <div className="text-center mt-4 mb-2">
-          <h2 className="inline-block px-6 py-1 border-b-2 border-black text-lg font-bold">يومية البطارية الثانية راجمات</h2>
-        </div>
-
-        <table className="w-full border-collapse text-sm mt-2" style={{ border: "1.5px solid #000" }}>
-          <thead>
-            <tr className="bg-gray-100">
-              <Th w="6%">م</Th>
-              <Th w="14%">الصنف</Th>
-              <Th>الإجازات</Th>
-              <Th>الأذونات</Th>
-              <Th>الغياب</Th>
-              <Th>المستشفى</Th>
-              <Th>الدورة</Th>
-              <Th>القوة</Th>
-              <Th>الموجود</Th>
-            </tr>
-          </thead>
-          <tbody>
-            {sectionTotals.map((s, i) => (
-              <tr key={s.f}>
-                <Td center>{i + 1}</Td>
-                <Td center bold>{s.f}</Td>
-                <Td center>{s.c.leave || ""}</Td>
-                <Td center>{s.c.permit || ""}</Td>
-                <Td center>{s.c.absent || ""}</Td>
-                <Td center>{s.c.sick || ""}</Td>
-                <Td center>{s.c.course || ""}</Td>
-                <Td center bold>{s.c.total || ""}</Td>
-                <Td center bold>{s.c.present || ""}</Td>
-              </tr>
-            ))}
-            <tr className="bg-gray-100 font-bold">
-              <Td center colSpan={2}>الإجمالي</Td>
-              <Td center>{grand.leave || 0}</Td>
-              <Td center>{grand.permit || 0}</Td>
-              <Td center>{grand.absent || 0}</Td>
-              <Td center>{grand.sick || 0}</Td>
-              <Td center>{grand.course || 0}</Td>
-              <Td center>{grand.total || 0}</Td>
-              <Td center>{grand.present || 0}</Td>
-            </tr>
-          </tbody>
-        </table>
-
-        <div className="mt-6">
-          <div className="text-center font-bold mb-2 text-base">التغيرات</div>
-          <table className="w-full border-collapse text-sm" style={{ border: "1.5px solid #000" }}>
-            <thead>
-              <tr className="bg-gray-100">
-                <Th w="18%">التغير</Th>
-                <Th>الاسم</Th>
-                <Th w="14%">الرتبة</Th>
-                <Th w="12%">الوحدة</Th>
-                <Th w="22%">ملاحظات</Th>
-              </tr>
-            </thead>
-            <tbody>
-              {renderChangeRows("خروج إجازة", changes?.newLeave ?? [], entries)}
-              {renderChangeRows("عودة", changes?.returned ?? [], entries)}
-              {renderChangeRows("غياب جديد", changes?.newAbsent ?? [], entries)}
-              {renderChangeRows("مريض جديد", changes?.newSick ?? [], entries)}
-              {renderChangeRows("إذن", changes?.newPermit ?? [], entries)}
-              {renderChangeRows("دورة", changes?.newCourse ?? [], entries)}
-              {(!changes ||
-                (changes.newLeave.length + changes.returned.length + changes.newAbsent.length +
-                 changes.newSick.length + changes.newPermit.length + changes.newCourse.length === 0)) && (
-                <tr><Td center colSpan={5}>{prevReport ? "لا توجد تغيرات عن أمس" : "أول تقرير - لا يوجد سابق للمقارنة"}</Td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {notes && (
-          <div className="mt-4 text-sm">
-            <strong>ملاحظات: </strong>{notes}
-          </div>
-        )}
-
-        <div className="grid grid-cols-2 gap-8 mt-16 text-sm text-center">
-          <div><div className="border-t border-black pt-1">أركان حرب البطارية</div></div>
-          <div><div className="border-t border-black pt-1">قائد البطارية</div></div>
         </div>
       </div>
 
       <style>{`
         @media print {
           @page { size: A4; margin: 10mm; }
-          body * { visibility: hidden; }
-          .official-report, .official-report * { visibility: visible; }
-          .official-report { position: absolute; inset: 0; margin: 0 auto; }
+          body * { visibility: hidden !important; }
+          .official-report, .official-report * { visibility: visible !important; }
+          .official-report { 
+            position: absolute !important; 
+            inset: 0 !important; 
+            margin: 0 auto !important;
+            transform: none !important;
+            width: 210mm !important;
+            box-shadow: none !important;
+          }
         }
         .official-report th, .official-report td {
           border: 1px solid #000; padding: 6px 8px;
