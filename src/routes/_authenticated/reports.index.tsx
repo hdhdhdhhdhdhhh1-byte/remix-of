@@ -21,16 +21,13 @@ export const Route = createFileRoute("/_authenticated/reports/")({
 
 interface Person { id: string; full_name: string; military_rank: string | null; formation: string | null; military_number: string | null; }
 
-// Print order matches the official form
 const PRINT_ROWS: string[] = ["الضباط", "ف١", "ف٢", "ق س", "ق ك"];
-
 const ARABIC_WEEKDAYS = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
 
 function ReportsPage() {
   const { can, isAdmin, user } = useAuth();
   const canEdit = isAdmin || can("reports_entry", "edit") || can("reports_entry", "add");
   const canApprove = isAdmin || can("reports_entry", "approve");
-  const canViewEntry = isAdmin || can("reports_entry", "view");
   const qc = useQueryClient();
   const printRef = useRef<HTMLDivElement>(null);
 
@@ -58,40 +55,52 @@ function ReportsPage() {
     },
   });
 
+  // FIX 1: جلب آخر تقرير قبل هذا التاريخ سواء معتمد أو لا
   const { data: prevReport } = useQuery({
     queryKey: ["prev-report", reportDate],
     queryFn: async () => {
       const { data } = await supabase.from("daily_reports")
         .select("id, report_date, report_entries(person_id, status)")
         .lt("report_date", reportDate)
-        .not("approved_at", "is", null)
         .order("report_date", { ascending: false })
         .limit(1).maybeSingle();
       return data;
     },
   });
 
+  // FIX 2: خريطة آخر تقرير - تعريفها قبل الـ useEffect
+  const prevMap = useMemo(() => {
+    const m: Record<string, AttendanceStatus> = {};
+    if (prevReport) {
+      const ents = (prevReport.report_entries ?? []) as { person_id: string; status: AttendanceStatus }[];
+      ents.forEach((e) => { m[e.person_id] = e.status; });
+    }
+    return m;
+  }, [prevReport]);
+
+  // FIX 3: المنطق الجديد للتعبئة
   useEffect(() => {
+    // لو فيه تقرير محفوظ لنفس اليوم -> اعرضه
     if (report && "report_entries" in report) {
       const map: Record<string, { status: AttendanceStatus; note: string }> = {};
       const ents = (report.report_entries ?? []) as { person_id: string; status: AttendanceStatus; note: string | null }[];
       ents.forEach((e) => { map[e.person_id] = { status: e.status, note: e.note ?? "" }; });
       setEntries(map);
       setNotes((report as { notes?: string | null }).notes ?? "");
-    } else {
-  const def: Record<string, { status: AttendanceStatus; note: string }> = {};
-
-  persons.forEach((p) => {
-    def[p.id] = {
-      status: prevMap[p.id] ?? "present",
-      note: "",
-    };
-  });
-
-  setEntries(def);
-  setNotes("");
+    } else if (persons.length > 0) {
+      // FIX: يوم جديد بدون تقرير -> انسخ من آخر تقرير (الإحصائي يبقى)
+      // والمتغيرات (notes) تكون فاضية
+      const def: Record<string, { status: AttendanceStatus; note: string }> = {};
+      persons.forEach((p) => {
+        def[p.id] = {
+          status: prevMap[p.id] ?? "present", // يبقى كما كان في آخر تقرير
+          note: "", // المتغيرات فاضية
+        };
+      });
+      setEntries(def);
+      setNotes(""); // المتغيرات فاضية لليوم الجديد
     }
-  }, [report, persons]);
+  }, [report, persons, prevMap, reportDate]);
 
   const byFormation = useMemo(() => {
     const map: Record<string, Person[]> = {};
@@ -104,21 +113,11 @@ function ReportsPage() {
     return map;
   }, [persons]);
 
-  const prevMap = useMemo(() => {
-    const m: Record<string, AttendanceStatus> = {};
-    if (prevReport) {
-      const ents = (prevReport.report_entries ?? []) as { person_id: string; status: AttendanceStatus }[];
-      ents.forEach((e) => { m[e.person_id] = e.status; });
-    }
-    return m;
-  }, [prevReport]);
-
   const countsFor = (list: Person[]) => {
     const c: Record<AttendanceStatus, number> = {
       present: 0, absent: 0, leave: 0, sick: 0, permit: 0, mission: 0, course: 0, other: 0,
     };
     list.forEach((p) => { const s = entries[p.id]?.status ?? "present"; c[s]++; });
-    // "الغياب" in the official form folds mission/other into absent
     const absentAll = c.absent + c.mission + c.other;
     const total = list.length;
     const present = total - (c.leave + c.permit + absentAll + c.sick + c.course);
@@ -161,6 +160,7 @@ function ReportsPage() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["report"] });
+      qc.invalidateQueries({ queryKey: ["prev-report"] });
       qc.invalidateQueries({ queryKey: ["dashboard-stats"] });
       toast.success("تم حفظ التقرير");
     },
@@ -170,8 +170,7 @@ function ReportsPage() {
   const approveMut = useMutation({
     mutationFn: async () => {
       if (!report) throw new Error("احفظ التقرير أولاً");
-      const wasApprovedBefore = !!(report as { edited_after_approval?: boolean | null; approved_at?: string | null }).edited_after_approval
-        || false;
+      const wasApprovedBefore = !!(report as { edited_after_approval?: boolean | null; approved_at?: string | null }).edited_after_approval || false;
       const { data: existing } = await supabase.from("daily_reports")
         .select("id, approved_at, edited_after_approval").eq("id", report.id).maybeSingle();
       const reapproving = !!existing?.edited_after_approval || wasApprovedBefore;
@@ -188,17 +187,19 @@ function ReportsPage() {
     onError: (e: Error) => toast.error("خطأ: " + e.message),
   });
 
-  // Changes vs previous report — names shown ONLY here
+  // FIX 4: المتغيرات - تشتغل حتى لو التقرير لسه ما انحفظ لليوم الجديد
   const changes = useMemo(() => {
-  if (!prevReport || !report) return null;
+    if (!prevReport) return null; // أول تقرير في النظام
     const newLeave: Person[] = [], returned: Person[] = [], newAbsent: Person[] = [],
       newSick: Person[] = [], newPermit: Person[] = [], newCourse: Person[] = [];
     persons.forEach((p) => {
       const now = entries[p.id]?.status;
       const before = prevMap[p.id];
       if (!now) return;
+      // لو مافي قبل (فرد جديد) اعتبره موجود
+      if (!before) return;
       if (now === "leave" && before !== "leave") newLeave.push(p);
-      if (before && before !== "present" && now === "present") returned.push(p);
+      if (before !== "present" && now === "present") returned.push(p);
       if ((now === "absent" || now === "mission" || now === "other") &&
           !(before === "absent" || before === "mission" || before === "other")) newAbsent.push(p);
       if (now === "sick" && before !== "sick") newSick.push(p);
@@ -208,7 +209,6 @@ function ReportsPage() {
     return { newLeave, returned, newAbsent, newSick, newPermit, newCourse };
   }, [entries, persons, prevMap, prevReport]);
 
-  // Totals across all sections
   const sectionTotals = PRINT_ROWS.map((f) => ({ f, c: countsFor(byFormation[f] ?? []) }));
   const grand = sectionTotals.reduce(
     (acc, s) => ({
@@ -230,11 +230,10 @@ function ReportsPage() {
 
   return (
     <div className="space-y-6">
-      {/* ================= Toolbar (screen only) ================= */}
       <div className="flex items-center justify-between flex-wrap gap-4 print:hidden">
         <div>
           <h1 className="text-2xl md:text-3xl font-bold">التقرير اليومي</h1>
-          <p className="text-muted-foreground text-sm mt-1">إدخال حالات الأفراد؛ يُطبع التقرير الرسمي بالأعداد فقط</p>
+          <p className="text-muted-foreground text-sm mt-1">الإحصائي يُنسخ من آخر تقرير - المتغيرات فاضية كل يوم جديد</p>
         </div>
         <div className="flex items-end gap-2 flex-wrap">
           <div>
@@ -250,7 +249,6 @@ function ReportsPage() {
         </div>
       </div>
 
-      {/* ================= Data entry (screen only) ================= */}
       <div className="print:hidden space-y-4">
         {PRINT_ROWS.map((f) => {
           const list = byFormation[f] ?? [];
@@ -327,8 +325,8 @@ function ReportsPage() {
 
         <Card>
           <CardContent className="pt-6">
-            <Label>ملاحظات التقرير</Label>
-            <Input value={notes} onChange={(e) => setNotes(e.target.value)} disabled={!canEdit || approved} />
+            <Label>ملاحظات التقرير (المتغيرات)</Label>
+            <Input value={notes} onChange={(e) => setNotes(e.target.value)} disabled={!canEdit || approved} placeholder="فارغ كل يوم جديد - اكتب التعظيل الجديد هنا" />
           </CardContent>
         </Card>
 
@@ -351,21 +349,16 @@ function ReportsPage() {
         )}
       </div>
 
-      {/* ================= Official print block ================= */}
       <div ref={printRef} dir="rtl" className="official-report bg-white text-black mx-auto" style={{ width: "210mm", minHeight: "297mm", padding: "12mm 14mm", fontFamily: "'Cairo', 'Tahoma', sans-serif" }}>
-        {/* Header */}
         <div className="flex items-start justify-between gap-4">
-          {/* Left: date/day */}
           <div className="text-sm leading-8 min-w-[110px]">
             <div>التاريخ: <strong>{arDate}</strong> م</div>
             <div>اليوم: <strong>{weekday}</strong></div>
           </div>
-          {/* Center: logo + bismillah */}
           <div className="flex-1 text-center">
             <div className="text-base font-bold mb-1">بسم الله الرحمن الرحيم</div>
             <img src={logoUrl} alt="شعار المقاومة الوطنية" className="mx-auto" style={{ width: "90px", height: "90px", objectFit: "contain" }} />
           </div>
-          {/* Right: military headings */}
           <div className="text-sm leading-7 text-right min-w-[220px]">
             <div className="font-bold">قيادة قوات المقاومة الوطنية</div>
             <div>حراس الجمهورية</div>
@@ -375,12 +368,10 @@ function ReportsPage() {
           </div>
         </div>
 
-        {/* Title */}
         <div className="text-center mt-4 mb-2">
           <h2 className="inline-block px-6 py-1 border-b-2 border-black text-lg font-bold">يومية البطارية الثانية راجمات</h2>
         </div>
 
-        {/* Main stats table */}
         <table className="w-full border-collapse text-sm mt-2" style={{ border: "1.5px solid #000" }}>
           <thead>
             <tr className="bg-gray-100">
@@ -422,7 +413,6 @@ function ReportsPage() {
           </tbody>
         </table>
 
-        {/* Changes section */}
         <div className="mt-6">
           <div className="text-center font-bold mb-2 text-base">التغيرات</div>
           <table className="w-full border-collapse text-sm" style={{ border: "1.5px solid #000" }}>
@@ -445,7 +435,7 @@ function ReportsPage() {
               {(!changes ||
                 (changes.newLeave.length + changes.returned.length + changes.newAbsent.length +
                  changes.newSick.length + changes.newPermit.length + changes.newCourse.length === 0)) && (
-                <tr><Td center colSpan={5}>لا توجد تغيرات</Td></tr>
+                <tr><Td center colSpan={5}>{prevReport ? "لا توجد تغيرات عن أمس" : "أول تقرير - لا يوجد سابق للمقارنة"}</Td></tr>
               )}
             </tbody>
           </table>
@@ -457,14 +447,9 @@ function ReportsPage() {
           </div>
         )}
 
-        {/* Signatures */}
         <div className="grid grid-cols-2 gap-8 mt-16 text-sm text-center">
-          <div>
-            <div className="border-t border-black pt-1">أركان حرب البطارية</div>
-          </div>
-          <div>
-            <div className="border-t border-black pt-1">قائد البطارية</div>
-          </div>
+          <div><div className="border-t border-black pt-1">أركان حرب البطارية</div></div>
+          <div><div className="border-t border-black pt-1">قائد البطارية</div></div>
         </div>
       </div>
 
