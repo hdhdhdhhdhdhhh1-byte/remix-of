@@ -79,10 +79,17 @@ function ReportsPage() {
       setEntries(map);
       setNotes((report as { notes?: string | null }).notes ?? "");
     } else {
-      const def: Record<string, { status: AttendanceStatus; note: string }> = {};
-      persons.forEach((p) => { def[p.id] = { status: "present", note: "" }; });
-      setEntries(def);
-      setNotes("");
+  const def: Record<string, { status: AttendanceStatus; note: string }> = {};
+
+  persons.forEach((p) => {
+    def[p.id] = {
+      status: prevMap[p.id] ?? "present",
+      note: "",
+    };
+  });
+
+  setEntries(def);
+  setNotes("");
     }
   }, [report, persons]);
 
@@ -183,7 +190,7 @@ function ReportsPage() {
 
   // Changes vs previous report — names shown ONLY here
   const changes = useMemo(() => {
-    if (!prevReport) return null;
+  if (!prevReport || !report) return null;
     const newLeave: Person[] = [], returned: Person[] = [], newAbsent: Person[] = [],
       newSick: Person[] = [], newPermit: Person[] = [], newCourse: Person[] = [];
     persons.forEach((p) => {
