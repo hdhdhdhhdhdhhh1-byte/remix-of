@@ -269,9 +269,12 @@ function LeavesPage() {
 
 
 
-      const updateData: any = {
-        status,
-      };
+      const updateData: {
+  status: "approved" | "rejected" | "pending";
+  approved_by?: string | null;
+} = {
+  status,
+};
 
 
 
