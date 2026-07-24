@@ -147,7 +147,8 @@ function ReportsViewPage() {
   };
 
   const changes = useMemo(() => {
-    if (!selected || prevEntries.length === 0) return null;
+    if (!selected) return null;
+if (prevEntries.length === 0) return { newLeave: [], returned: [], newAbsent: [], newSick: [], newPermit: [], newCourse: [] };
     const newLeave: Person[] = [], returned: Person[] = [], newAbsent: Person[] = [],
       newSick: Person[] = [], newPermit: Person[] = [], newCourse: Person[] = [];
     persons.forEach((p) => {
