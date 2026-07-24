@@ -64,8 +64,12 @@ function ArchivePage() {
   .map((x) => x.person_id)
   .filter((id): id is string => !!id);
 
-    let personsMap: Record<string, any> = {};
-
+    const personsMap: Record<string, {
+  id: string;
+  full_name: string;
+  military_number: string | null;
+  formation: string | null;
+}> = {};
 
     if (personIds.length) {
 
