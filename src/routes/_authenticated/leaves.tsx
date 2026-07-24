@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import { Card, CardContent } from "@/components/ui/card";
@@ -32,8 +32,9 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Plus, FileText, CheckCircle2, Trash2, Printer } from "lucide-react";
-import { printElement } from "@/lib/export";
+import { Plus, FileText, CheckCircle2, Trash2, Printer, FileDown } from "lucide-react";
+import { printElement, exportElementAsPDF } from "@/lib/export";
+import logoUrl from "@/assets/resistance-logo.jpg";
 
 export const Route = createFileRoute("/_authenticated/leaves")({
   component: LeavesPage,
@@ -48,7 +49,8 @@ interface Person {
   formation?: string | null;
 }
 
-const LEAVE_TYPES = ["اعتيادية", "عارضة", "مرضية", "بدون راتب", "طارئة"];
+// تم التعديل حسب طلبك: استحقاقية بدل اعتيادية، اضطرارية بدل عارضة
+const LEAVE_TYPES = ["استحقاقية", "اضطرارية", "مرضية", "بدون راتب", "طارئة"];
 
 function LeavesPage() {
   const { can, isAdmin } = useAuth();
@@ -76,7 +78,6 @@ function LeavesPage() {
       const { data: leaveData, error } = await supabase.from("leaves").select("*").order("start_date", { ascending: false });
       if (error) throw error;
 
-      // FIX: كان data -> الصح leaveData
       const personIds = (leaveData ?? [])
         .map((x: { person_id: string | null }) => x.person_id)
         .filter((id): id is string => !!id);
@@ -132,21 +133,15 @@ function LeavesPage() {
   const setStatusMut = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: "approved" | "rejected" | "pending" }) => {
       const { data: userData } = await supabase.auth.getUser();
-
-      // FIX: أضفنا approved_at للنوع عشان TS ما يعترض، حتى لو العمود مش موجود في الداتا بيس
       const updateData: {
         status: "approved" | "rejected" | "pending";
         approved_by?: string | null;
         approved_at?: string | null;
-      } = {
-        status,
-      };
-
+      } = { status };
       if (status === "approved") {
         updateData.approved_by = userData.user?.id ?? null;
         updateData.approved_at = new Date().toISOString();
       }
-
       const { error } = await supabase.from("leaves").update(updateData).eq("id", id);
       if (error) throw error;
     },
@@ -292,7 +287,7 @@ function LeaveForm({
   const [person_id, setPersonId] = useState("");
   const [start_date, setStart] = useState(new Date().toISOString().slice(0, 10));
   const [end_date, setEnd] = useState(new Date().toISOString().slice(0, 10));
-  const [leave_type, setType] = useState("اعتيادية");
+  const [leave_type, setType] = useState("استحقاقية");
   const [reason, setReason] = useState("");
 
   return (
@@ -342,8 +337,8 @@ function LeaveForm({
           </div>
         </div>
         <div>
-          <Label>ملاحظات</Label>
-          <Textarea value={reason} onChange={(e) => setReason(e.target.value)} />
+          <Label>ملاحظات / الوجهة</Label>
+          <Textarea value={reason} onChange={(e) => setReason(e.target.value)} placeholder="مثال: تعز - ملاحظة" />
         </div>
       </div>
       <DialogFooter>
@@ -362,30 +357,220 @@ function LeaveForm({
 
 function LeavePreview({ leave }: { leave: LeaveRow }) {
   const printRef = useRef<HTMLDivElement>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(1);
+  
   const days = Math.ceil((new Date(leave.end_date).getTime() - new Date(leave.start_date).getTime()) / 86400000) + 1;
+  
+  useEffect(() => {
+    const updateScale = () => {
+      if (!wrapperRef.current) return;
+      const w = wrapperRef.current.clientWidth - 16;
+      const reportW = 794;
+      setScale(w < reportW ? w / reportW : 1);
+    };
+    updateScale();
+    window.addEventListener("resize", updateScale);
+    return () => window.removeEventListener("resize", updateScale);
+  }, []);
+
+  const today = new Date();
+  const arDate = `${today.getFullYear()} / ${String(today.getMonth()+1).padStart(2,'0')} / ${String(today.getDate()).padStart(2,'0')} م`;
+  const startDisplay = leave.start_date.split('-').reverse().join('/');
+  const endDisplay = leave.end_date.split('-').reverse().join('/');
 
   return (
-    <DialogContent>
-      <DialogHeader>
+    <DialogContent className="max-w-[95vw] md:max-w-[850px] p-2 md:p-6 bg-gray-50">
+      <DialogHeader className="print:hidden">
         <DialogTitle>تصريح إجازة</DialogTitle>
       </DialogHeader>
-      <div ref={printRef}>
-        <h2>{leave.persons?.full_name ?? "-"}</h2>
-        <p>النوع: {leave.leave_type}</p>
-        <p>
-          من {leave.start_date} إلى {leave.end_date}
-        </p>
-        <p>المدة: {days} يوم</p>
-        <p>ملاحظات: {leave.reason ?? "-"}</p>
+
+      <div className="flex gap-2 justify-end print:hidden mb-2">
+        <Button variant="outline" size="sm" onClick={() => printRef.current && printElement(printRef.current)}>
+          <Printer className="h-4 w-4 ml-1" /> طباعة
+        </Button>
+        <Button variant="outline" size="sm" onClick={() => printRef.current && exportElementAsPDF(printRef.current, `تصريح-اجازة-${leave.persons?.full_name}`)}>
+          <FileDown className="h-4 w-4 ml-1" /> PDF
+        </Button>
       </div>
-      <Button
-        onClick={() => {
-          if (printRef.current) printElement(printRef.current);
-        }}
-      >
-        <Printer className="h-4 w-4 ml-1" />
-        طباعة
-      </Button>
+
+      <div ref={wrapperRef} className="w-full flex justify-center overflow-hidden rounded-xl bg-gray-100 p-1">
+        <div
+          style={{
+            width: "794px",
+            height: scale < 1 ? `${520 * scale}px` : "auto",
+            transform: `scale(${scale})`,
+            transformOrigin: "top center",
+            transition: "transform 0.2s ease",
+          }}
+        >
+          <div
+            ref={printRef}
+            dir="rtl"
+            className="vacation-official bg-white text-black relative shadow-md"
+            style={{
+              width: "210mm",
+              minHeight: "140mm",
+              padding: "9mm 11mm",
+              fontFamily: "'Cairo', 'Tahoma', sans-serif",
+              border: "2.5px solid #000",
+              borderRadius: "18px",
+              overflow: "hidden",
+            }}
+          >
+            {/* Watermark */}
+            <img
+              src={logoUrl}
+              alt=""
+              style={{
+                position: "absolute",
+                top: "52%",
+                left: "50%",
+                transform: "translate(-50%, -50%)",
+                width: "260px",
+                height: "260px",
+                objectFit: "contain",
+                opacity: 0.07,
+                pointerEvents: "none",
+                zIndex: 0,
+              }}
+            />
+
+            {/* Header */}
+            <div className="relative z-10 flex items-start justify-between gap-2">
+              <div className="text-[12px] leading-[1.6] text-right min-w-[190px]">
+                <div className="font-bold">قيادة قوات المقاومة الوطنية</div>
+                <div>حراس الجمهورية</div>
+                <div>قيادة لواء مدفعية المقاومة الوطنية</div>
+                <div className="font-bold">مكتب البشرية</div>
+              </div>
+
+              <div className="flex-1 text-center">
+                <div className="text-[14px] font-bold mb-1" style={{ fontFamily: "Traditional Arabic, serif" }}>
+                  بسم الله الرحمن الرحيم
+                </div>
+                <img src={logoUrl} alt="شعار" className="mx-auto" style={{ width: "80px", height: "80px", objectFit: "contain" }} />
+              </div>
+
+              <div className="text-[12px] leading-7 min-w-[140px] text-right">
+                <div>التاريخ: {arDate}</div>
+                <div>الرقم : ( &nbsp;&nbsp;&nbsp;&nbsp; )</div>
+              </div>
+            </div>
+
+            {/* Title */}
+            <div className="relative z-10 text-center mt-3 mb-3">
+              <h2 className="text-[19px] font-bold">تصريح إجازة</h2>
+            </div>
+
+            {/* Table - نفس الصورة بالضبط */}
+            <div className="relative z-10">
+              <table className="w-full border-collapse text-[12px]" style={{ border: "1.5px solid #000" }}>
+                <thead>
+                  <tr className="bg-[#f3f3f3]">
+                    <th style={{ border: "1px solid #000", padding: "5px 3px", width: "22px" }}>م</th>
+                    <th style={{ border: "1px solid #000", padding: "5px 3px", width: "58px" }}>م موحد</th>
+                    <th style={{ border: "1px solid #000", padding: "5px 3px", width: "60px" }}>الرتبة</th>
+                    <th style={{ border: "1px solid #000", padding: "5px 3px" }}>الاسم</th>
+                    <th style={{ border: "1px solid #000", padding: "5px 3px", width: "62px" }}>الوحدة</th>
+                    <th style={{ border: "1px solid #000", padding: "5px 3px", width: "48px" }}>من</th>
+                    <th style={{ border: "1px solid #000", padding: "5px 3px", width: "48px" }}>الى</th>
+                    <th style={{ border: "1px solid #000", padding: "5px 3px", width: "48px" }}>المدة</th>
+                    <th style={{ border: "1px solid #000", padding: "5px 3px", width: "52px" }}>نوعها</th>
+                    <th style={{ border: "1px solid #000", padding: "5px 3px", width: "58px" }}>ملاحظة</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td style={{ border: "1px solid #000", padding: "7px 3px", textAlign: "center" }}>1</td>
+                    <td style={{ border: "1px solid #000", padding: "7px 3px", textAlign: "center", fontSize: "11px" }}>
+                      {leave.persons?.military_number ?? "-"}
+                    </td>
+                    <td style={{ border: "1px solid #000", padding: "7px 3px", textAlign: "center", fontSize: "11px" }}>
+                      {leave.persons?.military_rank ?? "-"}
+                    </td>
+                    <td style={{ border: "1px solid #000", padding: "7px 3px", textAlign: "center", fontWeight: 700, fontSize: "12px" }}>
+                      {leave.persons?.full_name ?? "-"}
+                    </td>
+                    <td style={{ border: "1px solid #000", padding: "7px 3px", textAlign: "center" }}>
+                      {leave.persons?.formation ?? leave.persons?.squad ?? "-"}
+                    </td>
+                    <td style={{ border: "1px solid #000", padding: "7px 3px", textAlign: "center", fontSize: "11px" }}>
+                      {startDisplay}
+                    </td>
+                    <td style={{ border: "1px solid #000", padding: "7px 3px", textAlign: "center", fontSize: "11px" }}>
+                      {endDisplay}
+                    </td>
+                    <td style={{ border: "1px solid #000", padding: "7px 3px", textAlign: "center" }}>
+                      {days} يوم
+                    </td>
+                    <td style={{ border: "1px solid #000", padding: "7px 3px", textAlign: "center", fontSize: "11px" }}>
+                      {leave.leave_type}
+                    </td>
+                    <td style={{ border: "1px solid #000", padding: "7px 3px", textAlign: "center", fontSize: "10px" }}>
+                      {leave.reason ? leave.reason.slice(0,15) : ""}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            {/* Text */}
+            <div className="relative z-10 mt-4 text-[13px] leading-7">
+              <div>
+                - يصرح للمذكور أعلاه بالعبور الى <span className="font-bold inline-block border-b border-dotted border-black min-w-[140px] text-center px-2">{leave.reason ? leave.reason.split(' ')[0] : "________"}</span> كونه إجازة .
+              </div>
+              <div className="mt-1">
+                ملاحظة:
+              </div>
+              <div className="mr-2 text-[12.5px]">
+                يعتبر هذا التصريح ملغي في حالة الاستدعاء للاجازات .
+              </div>
+            </div>
+
+            <div className="relative z-10 border-t border-dashed border-black mt-5 mb-6"></div>
+
+            {/* Signatures */}
+            <div className="relative z-10 grid grid-cols-3 gap-2 text-[11px] text-center mt-1">
+              <div>
+                <div className="h-[35px]"></div>
+                <div className="font-bold leading-4">
+                  بشرية لواء مدفعية الوطنية
+                </div>
+              </div>
+              <div>
+                <div className="h-[35px]"></div>
+                <div className="font-bold leading-4">
+                  أركان حرب لواء مدفعية الوطنية
+                </div>
+              </div>
+              <div>
+                <div className="h-[35px]"></div>
+                <div className="font-bold leading-4">
+                  قائد لواء مدفعية الوطنية
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <style>{`
+        @media print {
+          @page { size: A4 landscape; margin: 6mm; }
+          body * { visibility: hidden !important; }
+          .vacation-official, .vacation-official * { visibility: visible !important; }
+          .vacation-official { 
+            position: absolute !important; 
+            inset: 0 !important; 
+            margin: 0 auto !important;
+            transform: none !important;
+            box-shadow: none !important;
+            border: 2.5px solid #000 !important;
+            border-radius: 18px !important;
+          }
+        }
+      `}</style>
     </DialogContent>
   );
 }
