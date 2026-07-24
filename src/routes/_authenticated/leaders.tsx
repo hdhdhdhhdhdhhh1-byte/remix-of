@@ -36,7 +36,7 @@ function LeavesPage() {
     queryKey: ["leaves", statusFilter],
     queryFn: async () => {
       let q = supabase.from("leaves").select("*").order("start_date", { ascending: false });
-      if (statusFilter !== "all") q = q.eq("status", statusFilter);
+      if (statusFilter !== "all") q = q.eq("status", statusFilter as "pending" | "approved" | "rejected");
 
       const { data: leaveData, error } = await q;
       if (error) throw error;
