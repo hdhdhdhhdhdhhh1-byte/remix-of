@@ -273,7 +273,7 @@ military_rank: selected?.military_rank ?? "",
             <TableBody>
 
 
-              {leaders.map((l:any)=>(
+              {leaders.map((l) => (
 
                 <TableRow key={l.id}>
 
