@@ -76,52 +76,49 @@ function LeavePreview({ leave }: { leave: LeaveRow }) {
   const startDisplay = leave.start_date.split("-").reverse().join("/");
   const endDisplay = leave.end_date.split("-").reverse().join("/");
 
-  // تحميل html2canvas من CDN إذا مش موجود
-  const loadHtml2Canvas = (): Promise<any> => {
-    return new Promise((resolve, reject) => {
-      // @ts-ignore
-      if (window.html2canvas) return resolve(window.html2canvas);
-      const script = document.createElement("script");
-      script.src = "https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js";
-      script.onload = () => {
-        // @ts-ignore
-        resolve(window.html2canvas);
-      };
-      script.onerror = () => reject(new Error("فشل تحميل المكتبة من CDN"));
-      document.head.appendChild(script);
-    });
-  };
-
   const saveAsImage = async () => {
     if (!printRef.current) return;
     setSavingImage(true);
     try {
-      let html2canvasLib: any = null;
-      try {
-        // محاولة الاستيراد المحلي أولاً
-        const mod = await import("html2canvas");
-        html2canvasLib = mod.default || mod;
-      } catch {
-        // إذا فشل، حمّل من CDN
-        html2canvasLib = await loadHtml2Canvas();
-      }
+      // نستخدم html-to-image عبر CDN - تدعم oklch
+      const loadHtmlToImage = (): Promise<any> => {
+        return new Promise((resolve, reject) => {
+          // @ts-ignore
+          if (window.htmlToImage) return resolve(window.htmlToImage);
+          const script = document.createElement("script");
+          script.src = "https://cdn.jsdelivr.net/npm/html-to-image@1.11.11/dist/html-to-image.js";
+          script.onload = () => {
+            // @ts-ignore
+            resolve(window.htmlToImage);
+          };
+          script.onerror = () => reject(new Error("فشل تحميل مكتبة الصور"));
+          document.head.appendChild(script);
+        });
+      };
 
-      const canvas = await html2canvasLib(printRef.current, {
-        scale: 3,
-        useCORS: true,
-        allowTaint: true,
+      const htmlToImage = await loadHtmlToImage();
+      
+      const dataUrl = await htmlToImage.toPng(printRef.current, {
+        quality: 1,
+        pixelRatio: 3,
         backgroundColor: "#ffffff",
-        logging: false,
+        cacheBust: true,
+        // مهم جداً لحل مشكلة oklch
+        style: {
+          backgroundColor: "#ffffff",
+        }
       });
 
       const link = document.createElement("a");
       link.download = `تصريح-اجازة-${leave.persons?.full_name}-${leave.start_date}.png`;
-      link.href = canvas.toDataURL("image/png", 1.0);
+      link.href = dataUrl;
       link.click();
       toast.success("تم حفظ الصورة بنجاح ✅");
     } catch (e: any) {
-      console.error(e);
-      toast.error("تعذر حفظ الصورة: " + e.message);
+      console.error("save error", e);
+      // fallback: نفتح الطباعة ويقدر يحفظها كصورة من هناك
+      toast.error("جاري فتح الطباعة بدلاً من الصورة...");
+      if (printRef.current) printElement(printRef.current);
     } finally {
       setSavingImage(false);
     }
@@ -135,25 +132,26 @@ function LeavePreview({ leave }: { leave: LeaveRow }) {
         <Button variant="outline" size="sm" onClick={() => printRef.current && exportElementAsPDF(printRef.current, `تصريح-اجازة-${leave.persons?.full_name}`)}><FileDown className="h-4 w-4 ml-1" /> PDF</Button>
         <Button variant="default" size="sm" onClick={saveAsImage} disabled={savingImage} className="bg-emerald-700 hover:bg-emerald-800"><ImageIcon className="h-4 w-4 ml-1" /> {savingImage ? "جاري الحفظ..." : "حفظ كصورة"}</Button>
       </div>
-      <div ref={wrapperRef} className="w-full flex justify-center bg-gray-100 rounded-b-xl p-2 md:p-4 overflow-hidden">
+      <div ref={wrapperRef} className="w-full flex justify-center bg-[#f3f3f3] rounded-b-xl p-2 md:p-4 overflow-hidden">
         <div style={{ width: "794px", height: scale < 1 ? `${560 * scale}px` : "auto", transform: `scale(${scale})`, transformOrigin: "top center", transition: "transform 0.2s ease", flexShrink: 0 }}>
-          <div ref={printRef} dir="rtl" className="vacation-official bg-white text-black relative shadow-lg" style={{ width: "210mm", minHeight: "148mm", padding: "9mm 11mm", fontFamily: "'Cairo', 'Tahoma', sans-serif", border: "2.8px solid #000", borderRadius: "20px", overflow: "hidden" }}>
+          {/* هنا أضفنا ألوان صريحة HEX بدل oklch عشان html2canvas ما يعلق */}
+          <div ref={printRef} dir="rtl" className="vacation-official bg-white text-black relative shadow-lg" style={{ width: "210mm", minHeight: "148mm", padding: "9mm 11mm", fontFamily: "'Cairo', 'Tahoma', sans-serif", border: "2.8px solid #000000", borderRadius: "20px", overflow: "hidden", backgroundColor: "#ffffff", color: "#000000" }}>
             <img src={logoUrl} alt="" crossOrigin="anonymous" style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", width: "300px", height: "300px", objectFit: "contain", opacity: 0.07, pointerEvents: "none", zIndex: 0 }} />
             <div className="relative z-10 flex items-start justify-between gap-2">
-              <div className="text-[12.5px] leading-[1.7] text-right min-w-[195px] font-medium"><div className="font-bold">قيادة قوات المقاومة الوطنية</div><div>حراس الجمهورية</div><div>قيادة لواء مدفعية المقاومة الوطنية</div><div className="font-bold">مكتب البشرية</div></div>
-              <div className="flex-1 text-center"><div className="text-[15px] font-bold mb-1" style={{ fontFamily: "Traditional Arabic, serif" }}>بسم الله الرحمن الرحيم</div><img src={logoUrl} alt="شعار" crossOrigin="anonymous" className="mx-auto" style={{ width: "88px", height: "88px", objectFit: "contain" }} /></div>
-              <div className="text-[12.5px] leading-7 min-w-[145px] text-right"><div>التاريخ: {arDate}</div><div>الرقم : ( &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; )</div></div>
+              <div style={{ fontSize: "12.5px", lineHeight: "1.7", textAlign: "right", minWidth: "195px", fontWeight: 500 }}><div style={{ fontWeight: 700 }}>قيادة قوات المقاومة الوطنية</div><div>حراس الجمهورية</div><div>قيادة لواء مدفعية المقاومة الوطنية</div><div style={{ fontWeight: 700 }}>مكتب البشرية</div></div>
+              <div className="flex-1 text-center"><div style={{ fontSize: "15px", fontWeight: 700, marginBottom: "4px", fontFamily: "Traditional Arabic, serif" }}>بسم الله الرحمن الرحيم</div><img src={logoUrl} alt="شعار" crossOrigin="anonymous" className="mx-auto" style={{ width: "88px", height: "88px", objectFit: "contain" }} /></div>
+              <div style={{ fontSize: "12.5px", lineHeight: "28px", minWidth: "145px", textAlign: "right" }}><div>التاريخ: {arDate}</div><div>الرقم : ( &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; )</div></div>
             </div>
-            <div className="relative z-10 text-center mt-3 mb-3"><h2 className="text-[20px] font-extrabold tracking-wide">تصريح إجازة</h2></div>
+            <div className="relative z-10 text-center mt-3 mb-3"><h2 style={{ fontSize: "20px", fontWeight: 800 }}>تصريح إجازة</h2></div>
             <div className="relative z-10">
-              <table className="w-full border-collapse text-[12px]" style={{ border: "1.6px solid #000" }}>
-                <thead><tr className="bg-[#f2f2f2]"><th style={{ border: "1px solid #000", padding: "6px 3px", width: "24px" }}>م</th><th style={{ border: "1px solid #000", padding: "6px 3px", width: "62px" }}>م موحد</th><th style={{ border: "1px solid #000", padding: "6px 3px", width: "62px" }}>الرتبة</th><th style={{ border: "1px solid #000", padding: "6px 3px" }}>الاسم</th><th style={{ border: "1px solid #000", padding: "6px 3px", width: "64px" }}>الوحدة</th><th style={{ border: "1px solid #000", padding: "6px 3px", width: "50px" }}>من</th><th style={{ border: "1px solid #000", padding: "6px 3px", width: "50px" }}>الى</th><th style={{ border: "1px solid #000", padding: "6px 3px", width: "50px" }}>المدة</th><th style={{ border: "1px solid #000", padding: "6px 3px", width: "56px" }}>نوعها</th><th style={{ border: "1px solid #000", padding: "6px 3px", width: "60px" }}>ملاحظة</th></tr></thead>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px", border: "1.6px solid #000000" }}>
+                <thead><tr style={{ backgroundColor: "#f2f2f2" }}><th style={{ border: "1px solid #000", padding: "6px 3px", width: "24px" }}>م</th><th style={{ border: "1px solid #000", padding: "6px 3px", width: "62px" }}>م موحد</th><th style={{ border: "1px solid #000", padding: "6px 3px", width: "62px" }}>الرتبة</th><th style={{ border: "1px solid #000", padding: "6px 3px" }}>الاسم</th><th style={{ border: "1px solid #000", padding: "6px 3px", width: "64px" }}>الوحدة</th><th style={{ border: "1px solid #000", padding: "6px 3px", width: "50px" }}>من</th><th style={{ border: "1px solid #000", padding: "6px 3px", width: "50px" }}>الى</th><th style={{ border: "1px solid #000", padding: "6px 3px", width: "50px" }}>المدة</th><th style={{ border: "1px solid #000", padding: "6px 3px", width: "56px" }}>نوعها</th><th style={{ border: "1px solid #000", padding: "6px 3px", width: "60px" }}>ملاحظة</th></tr></thead>
                 <tbody><tr><td style={{ border: "1px solid #000", padding: "8px 3px", textAlign: "center" }}>1</td><td style={{ border: "1px solid #000", padding: "8px 3px", textAlign: "center", fontSize: "11px" }}>{leave.persons?.military_number ?? "-"}</td><td style={{ border: "1px solid #000", padding: "8px 3px", textAlign: "center", fontSize: "11px" }}>{leave.persons?.military_rank ?? "-"}</td><td style={{ border: "1px solid #000", padding: "8px 3px", textAlign: "center", fontWeight: 800, fontSize: "12.5px" }}>{leave.persons?.full_name ?? "-"}</td><td style={{ border: "1px solid #000", padding: "8px 3px", textAlign: "center" }}>{leave.persons?.formation ?? leave.persons?.squad ?? "-"}</td><td style={{ border: "1px solid #000", padding: "8px 3px", textAlign: "center", fontSize: "11px" }}>{startDisplay}</td><td style={{ border: "1px solid #000", padding: "8px 3px", textAlign: "center", fontSize: "11px" }}>{endDisplay}</td><td style={{ border: "1px solid #000", padding: "8px 3px", textAlign: "center" }}>{days} يوم</td><td style={{ border: "1px solid #000", padding: "8px 3px", textAlign: "center", fontSize: "11px" }}>{leave.leave_type}</td><td style={{ border: "1px solid #000", padding: "8px 3px", textAlign: "center", fontSize: "10px" }}>{leave.reason ? leave.reason.slice(0, 20) : ""}</td></tr></tbody>
               </table>
             </div>
-            <div className="relative z-10 mt-4 text-[13.5px] leading-8 font-medium"><div>- يصرح للمذكور أعلاه بالعبور الى <span className="font-bold inline-block border-b border-dotted border-black min-w-[150px] text-center px-2">________</span> كونه إجازة .</div><div className="mt-2">ملاحظة:</div><div className="mr-2 text-[12.5px]">يعتبر هذا التصريح ملغي في حالة الاستدعاء للاجازات .</div></div>
+            <div className="relative z-10 mt-4" style={{ fontSize: "13.5px", lineHeight: "32px", fontWeight: 500 }}><div>- يصرح للمذكور أعلاه بالعبور الى <span style={{ fontWeight: 700, display: "inline-block", borderBottom: "1px dotted #000", minWidth: "150px", textAlign: "center", padding: "0 8px" }}>________</span> كونه إجازة .</div><div style={{ marginTop: "8px" }}>ملاحظة:</div><div style={{ marginRight: "8px", fontSize: "12.5px" }}>يعتبر هذا التصريح ملغي في حالة الاستدعاء للاجازات .</div></div>
             <div className="relative z-10 border-t border-dashed border-black mt-5 mb-6"></div>
-            <div className="relative z-10 grid grid-cols-3 gap-2 text-[11.5px] text-center mt-1"><div><div className="h-[38px]"></div><div className="font-bold leading-4">بشرية لواء مدفعية الوطنية</div></div><div><div className="h-[38px]"></div><div className="font-bold leading-4">أركان حرب لواء مدفعية الوطنية</div></div><div><div className="h-[38px]"></div><div className="font-bold leading-4">قائد لواء مدفعية الوطنية</div></div></div>
+            <div className="relative z-10 grid grid-cols-3 gap-2 text-center mt-1" style={{ fontSize: "11.5px" }}><div><div style={{ height: "38px" }}></div><div style={{ fontWeight: 700, lineHeight: "16px" }}>بشرية لواء مدفعية الوطنية</div></div><div><div style={{ height: "38px" }}></div><div style={{ fontWeight: 700, lineHeight: "16px" }}>أركان حرب لواء مدفعية الوطنية</div></div><div><div style={{ height: "38px" }}></div><div style={{ fontWeight: 700, lineHeight: "16px" }}>قائد لواء مدفعية الوطنية</div></div></div>
           </div>
         </div>
       </div>
@@ -161,3 +159,4 @@ function LeavePreview({ leave }: { leave: LeaveRow }) {
     </DialogContent>
   );
 }
+
