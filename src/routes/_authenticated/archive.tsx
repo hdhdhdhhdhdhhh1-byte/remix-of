@@ -60,10 +60,9 @@ function ArchivePage() {
     if (error) throw error;
 
 
-    const personIds = (leaveData ?? [])
-      .map((l) => l.person_id)
-      .filter(Boolean);
-
+    const personIds = data
+  .map((x) => x.person_id)
+  .filter((id): id is string => !!id);
 
     let personsMap: Record<string, any> = {};
 
