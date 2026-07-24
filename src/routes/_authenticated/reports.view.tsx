@@ -439,4 +439,4 @@ function renderChangeRows(
       <Td>{entryMap[p.id]?.note ?? ""}</Td>
     </tr>
   ));
-                    }
+          }
