@@ -21,7 +21,7 @@ export const Route = createFileRoute("/_authenticated/leaves")({
 });
 
 interface Person { id: string; full_name: string; military_rank: string | null; squad: string | null; military_number?: string | null; formation?: string | null; }
-const LEAVE_TYPES = ["استحقاقية", "اضطرارية", "مرضية", "بدون راتب", "طارئة"];
+const LEAVE_TYPES = ["استحقاقية", "سليمان", "مرضية", "بدون راتب", "طارئة"];
 
 function LeavesPage() {
   const { can, isAdmin } = useAuth();
