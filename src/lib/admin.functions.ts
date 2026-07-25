@@ -2,7 +2,29 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
-const OWNER_EMAIL = "shafiqalwatiry@gmail.com"; // خليته سمول عشان المقارنة
+const OWNER_EMAIL = "shafiqalwatiry@gmail.com";
+
+// دالة التسجيل في سجل العمليات - تشتغل من السيرفر مباشرة (آمنة)
+async function serverLogActivity(params: {
+  userId?: string | null;
+  action: string;
+  entity: string;
+  entity_id?: string | null;
+  details?: any;
+}) {
+  try {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    await supabaseAdmin.from("audit_log").insert({
+      user_id: params.userId?? null,
+      action: params.action,
+      entity: params.entity,
+      entity_id: params.entity_id?? null,
+      details: params.details?? null,
+    });
+  } catch (e) {
+    console.error("Audit log failed", e);
+  }
+}
 
 export const ensureOwner = createServerFn({ method: "POST" }).handler(async () => {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -23,24 +45,13 @@ export const ensureOwner = createServerFn({ method: "POST" }).handler(async () =
   return { ok: true };
 });
 
-// *** هذا هو الإصلاح للـ Forbidden ***
 async function assertAdmin(userId: string) {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-
-  // 1. جيب بيانات المستخدم اللي يحاول يضيف
   const { data: userData } = await supabaseAdmin.auth.admin.getUserById(userId);
   const email = userData.user?.email?.toLowerCase() || "";
-
-  // 2. إذا كان هو المالك نفسه - اسمح له مباشرة بدون ما تفحص الجدول
-  if (email === OWNER_EMAIL.toLowerCase()) {
-    return;
-  }
-
-  // 3. إذا مو مالك، شوف هل عنده دور owner
+  if (email === OWNER_EMAIL.toLowerCase()) return;
   const { data } = await supabaseAdmin.from("user_roles").select("role").eq("user_id", userId).eq("role", "owner").maybeSingle();
-  if (!data) {
-    throw new Error("Forbidden");
-  }
+  if (!data) throw new Error("Forbidden");
 }
 
 const PermSchema = z.object({
@@ -70,7 +81,6 @@ export const createUser = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     const uid = created.user!.id;
 
-    // جدول profiles عندك عموده id
     await supabaseAdmin.from("profiles").upsert({ id: uid, email: cleanEmail, full_name: data.full_name }, { onConflict: "id" });
 
     if (data.assigned_formation) {
@@ -83,6 +93,10 @@ export const createUser = createServerFn({ method: "POST" })
       await supabaseAdmin.from("permissions").delete().eq("user_id", uid);
       await supabaseAdmin.from("permissions").insert(data.permissions.map(p => ({...p, user_id: uid })));
     }
+
+    // تسجيل في سجل العمليات
+    await serverLogActivity({ userId: context.userId, action: 'create', entity: 'users', entity_id: uid, details: { email: cleanEmail, role: data.role, formation: data.assigned_formation } });
+
     return { ok: true, user_id: uid };
   });
 
@@ -110,6 +124,9 @@ export const updateUserPermissions = createServerFn({ method: "POST" }).middlewa
   if (data.assigned_formation!== undefined) await supabaseAdmin.from("profiles").update({ assigned_formation: data.assigned_formation }).eq("id", data.user_id);
   await supabaseAdmin.from("permissions").delete().eq("user_id", data.user_id);
   if (data.permissions.length > 0) await supabaseAdmin.from("permissions").insert(data.permissions.map((p) => ({...p, user_id: data.user_id })));
+
+  await serverLogActivity({ userId: context.userId, action: 'update', entity: 'users', entity_id: data.user_id, details: { role: data.role, formation: data.assigned_formation, perms_count: data.permissions.length } });
+
   return { ok: true };
 });
 
@@ -119,6 +136,9 @@ export const resetUserPassword = createServerFn({ method: "POST" }).middleware([
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { error } = await supabaseAdmin.auth.admin.updateUserById(data.user_id, { password: data.password });
   if (error) throw new Error(error.message);
+
+  await serverLogActivity({ userId: context.userId, action: 'update', entity: 'users', entity_id: data.user_id, details: { action: 'reset_password' } });
+
   return { ok: true };
 });
 
@@ -126,6 +146,9 @@ const DeleteUserInput = z.object({ user_id: z.string().uuid() });
 export const deleteUser = createServerFn({ method: "POST" }).middleware([requireSupabaseAuth]).inputValidator((i) => DeleteUserInput.parse(i)).handler(async ({ data, context }) => {
   await assertAdmin(context.userId);
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+  await serverLogActivity({ userId: context.userId, action: 'delete', entity: 'users', entity_id: data.user_id });
+
   await supabaseAdmin.from("profiles").delete().eq("id", data.user_id);
   await supabaseAdmin.from("user_roles").delete().eq("user_id", data.user_id);
   await supabaseAdmin.from("permissions").delete().eq("user_id", data.user_id);
