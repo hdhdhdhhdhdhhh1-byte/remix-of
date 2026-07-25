@@ -3,147 +3,106 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
-export const Route = createFileRoute("/_authenticated/leaves")({
-  component: LeavesPage,
+export const Route = createFileRoute("/_authenticated/leaders")({
+  component: LeadersPage,
 });
 
-type LeaveRow = {
-  id: string;
-  person_id: string | null;
-  leave_type: string;
-  start_date: string;
-  end_date: string;
-  status: "pending" | "approved" | "rejected";
-  approved_by?: string | null;
-  created_at: string;
-};
-
-function LeavesPage() {
-  const { user } = useAuth();
+function LeadersPage() {
+  const { isAdmin, can } = useAuth();
+  const canEdit = isAdmin || can("leaders", "edit");
   const qc = useQueryClient();
-  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [open, setOpen] = useState(false);
+  const [person_id, setPersonId] = useState("");
+  const [position, setPosition] = useState("");
+  const [unit, setUnit] = useState("");
 
-  // 1. جلب الإجازات مع الأشخاص
-  const { data: leaves = [] } = useQuery({
-    queryKey: ["leaves", statusFilter],
+  const { data: leaders = [] } = useQuery({
+    queryKey: ["leaders"],
     queryFn: async () => {
-      let q = supabase.from("leaves").select("*").order("start_date", { ascending: false });
-      if (statusFilter !== "all") q = q.eq("status", statusFilter as "pending" | "approved" | "rejected");
-
-      const { data: leaveData, error } = await q;
+      const { data, error } = await supabase.from("leaders").select("*, persons(full_name, military_rank)").order("created_at");
       if (error) throw error;
-
-      // FIX 142: كان data.map -> الصح leaveData
-      const personIds = (leaveData ?? [])
-        .map((x: { person_id: string | null }) => x.person_id)
-        .filter((id): id is string => !!id);
-
-      const personsMap: Record<string, { id: string; full_name: string }> = {};
-
-      if (personIds.length) {
-        const { data: personsData } = await supabase
-          .from("persons")
-          .select("id, full_name")
-          .in("id", personIds);
-
-        (personsData ?? []).forEach((p) => {
-          personsMap[p.id] = p;
-        });
-      }
-
-      return (leaveData ?? []).map((l) => ({
-        ...l,
-        persons: l.person_id ? personsMap[l.person_id] ?? null : null,
-      }));
+      return data;
     },
   });
 
-  // 2. الموافقة / الرفض
-  const approveMut = useMutation({
-    mutationFn: async ({ id, status }: { id: string; status: "approved" | "rejected" }) => {
-      const updateData: { status: "approved" | "rejected"; approved_by?: string | null } = {
-        status,
-      };
+  const { data: persons = [] } = useQuery({
+    queryKey: ["persons-all"],
+    queryFn: async () => (await supabase.from("persons").select("id, full_name").eq("active", true)).data ?? [],
+  });
 
-      // FIX 287: الجدول ما فيه approved_at، فيه approved_by فقط
-      // كان الكود القديم: updateData.approved_at = new Date().toISOString()
-      updateData.approved_by = user?.id ?? null;
-
-      const { error } = await supabase.from("leaves").update(updateData).eq("id", id);
-
+  const addMut = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase.from("leaders").insert({ person_id, position, unit: unit || null });
       if (error) throw error;
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["leaves"] });
-      toast.success("تم التحديث");
-    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["leaders"] }); setOpen(false); setPersonId(""); setPosition(""); setUnit(""); toast.success("تمت الإضافة"); },
     onError: (e: Error) => toast.error(e.message),
+  });
+
+  const delMut = useMutation({
+    mutationFn: async (id: string) => { const { error } = await supabase.from("leaders").delete().eq("id", id); if (error) throw error; },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["leaders"] }),
   });
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold">الإجازات</h1>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-[180px]">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">الكل</SelectItem>
-            <SelectItem value="pending">معلقة</SelectItem>
-            <SelectItem value="approved">موافق عليها</SelectItem>
-            <SelectItem value="rejected">مرفوضة</SelectItem>
-          </SelectContent>
-        </Select>
+      <div className="flex items-center justify-between flex-wrap gap-4">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-bold">القادة</h1>
+          <p className="text-muted-foreground text-sm mt-1">قادة البطارية والكتيبة</p>
+        </div>
+        {canEdit && (
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild><Button><Plus className="h-4 w-4 ml-1" /> إضافة قائد</Button></DialogTrigger>
+            <DialogContent>
+              <DialogHeader><DialogTitle>إضافة قائد</DialogTitle></DialogHeader>
+              <div className="grid gap-3">
+                <div>
+                  <Label>الفرد *</Label>
+                  <Select value={person_id} onValueChange={setPersonId}>
+                    <SelectTrigger><SelectValue placeholder="اختر" /></SelectTrigger>
+                    <SelectContent>{persons.map((p) => <SelectItem key={p.id} value={p.id}>{p.full_name}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+                <div><Label>المنصب *</Label><Input value={position} onChange={(e) => setPosition(e.target.value)} placeholder="قائد البطارية" /></div>
+                <div><Label>الوحدة</Label><Input value={unit} onChange={(e) => setUnit(e.target.value)} placeholder="البطارية / الكتيبة" /></div>
+              </div>
+              <DialogFooter><Button disabled={!person_id || !position || addMut.isPending} onClick={() => addMut.mutate()}>حفظ</Button></DialogFooter>
+            </DialogContent>
+          </Dialog>
+        )}
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>قائمة الإجازات</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>الفرد</TableHead>
-                <TableHead>النوع</TableHead>
-                <TableHead>من</TableHead>
-                <TableHead>إلى</TableHead>
-                <TableHead>الحالة</TableHead>
-                <TableHead>إجراء</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {leaves.map((l: any) => (
+      <Card><CardContent className="pt-6">
+        <Table>
+          <TableHeader><TableRow><TableHead>الاسم</TableHead><TableHead>الرتبة</TableHead><TableHead>المنصب</TableHead><TableHead>الوحدة</TableHead>{canEdit && <TableHead />}</TableRow></TableHeader>
+          <TableBody>
+            {leaders.map((l) => {
+              const p = l.persons as { full_name: string; military_rank: string | null } | null;
+              return (
                 <TableRow key={l.id}>
-                  <TableCell>{l.persons?.full_name ?? "-"}</TableCell>
-                  <TableCell>{l.leave_type}</TableCell>
-                  <TableCell>{l.start_date}</TableCell>
-                  <TableCell>{l.end_date}</TableCell>
-                  <TableCell>{l.status}</TableCell>
-                  <TableCell className="flex gap-2">
-                    <Button size="sm" variant="outline" onClick={() => approveMut.mutate({ id: l.id, status: "approved" })}>
-                      موافقة
-                    </Button>
-                    <Button size="sm" variant="ghost" onClick={() => approveMut.mutate({ id: l.id, status: "rejected" })}>
-                      رفض
-                    </Button>
-                  </TableCell>
+                  <TableCell>{p?.full_name ?? "-"}</TableCell>
+                  <TableCell>{p?.military_rank ?? "-"}</TableCell>
+                  <TableCell>{l.position}</TableCell>
+                  <TableCell>{l.unit ?? "-"}</TableCell>
+                  {canEdit && <TableCell><Button size="sm" variant="ghost" onClick={() => delMut.mutate(l.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button></TableCell>}
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+              );
+            })}
+            {leaders.length === 0 && <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground">لا يوجد قادة</TableCell></TableRow>}
+          </TableBody>
+        </Table>
+      </CardContent></Card>
     </div>
   );
 }
-
