@@ -23,8 +23,8 @@ export const ensureOwner = createServerFn({ method: "POST" }).handler(async () =
     ownerUser = created.user!;
   }
 
-  // إنشاء البروفايل أولاً ثم الدور
-  await supabaseAdmin.from("profiles").upsert({ user_id: ownerUser.id, email: OWNER_EMAIL, full_name: "المالك" }, { onConflict: "user_id" });
+  // التصحيح: جدول profiles عموده id وليس user_id
+  await supabaseAdmin.from("profiles").upsert({ id: ownerUser.id, email: OWNER_EMAIL, full_name: "المالك" }, { onConflict: "id" });
   await supabaseAdmin.from("user_roles").upsert({ user_id: ownerUser.id, role: "owner" }, { onConflict: "user_id,role" });
   return { ok: true, email: OWNER_EMAIL };
 });
@@ -48,28 +48,24 @@ const CreateUserInput = z.object({
 });
 
 export const createUser = createServerFn({ method: "POST" })
- .middleware([requireSupabaseAuth])
- .inputValidator((input) => CreateUserInput.parse(input))
- .handler(async ({ data, context }) => {
+.middleware([requireSupabaseAuth])
+.inputValidator((input) => CreateUserInput.parse(input))
+.handler(async ({ data, context }) => {
     await assertAdmin(context.userId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-
-    // تنظيف الإيميل
     const cleanEmail = data.email.trim().toLowerCase();
 
-    // حاول إنشاء المستخدم
     let { data: created, error } = await supabaseAdmin.auth.admin.createUser({
       email: cleanEmail, password: data.password, email_confirm: true,
       user_metadata: { full_name: data.full_name },
     });
 
-    // لو موجود من قبل، احذفه واعده (هذا يخليك تضيف تلقائي حتى لو مكرر)
     if (error && error.message.includes("already been registered")) {
       const { data: list } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 500 });
       const existing = list.users.find(u => u.email?.toLowerCase() === cleanEmail);
       if (existing) {
         await supabaseAdmin.auth.admin.deleteUser(existing.id);
-        await supabaseAdmin.from("profiles").delete().eq("user_id", existing.id);
+        await supabaseAdmin.from("profiles").delete().eq("id", existing.id);
         await supabaseAdmin.from("user_roles").delete().eq("user_id", existing.id);
         const retry = await supabaseAdmin.auth.admin.createUser({
           email: cleanEmail, password: data.password, email_confirm: true,
@@ -81,13 +77,17 @@ export const createUser = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     const uid = created.user!.id;
 
-    // *** الحل الجذري للـ FK: أنشئ البروفايل قبل الدور ***
-    await supabaseAdmin.from("profiles").upsert({
-      user_id: uid, email: cleanEmail, full_name: data.full_name,
-      assigned_formation: data.assigned_formation || null,
-    }, { onConflict: "user_id" });
+    // الحل الجذري: ننشئ البروفايل أولاً بعمود id
+    const { error: profErr } = await supabaseAdmin.from("profiles").upsert({
+      id: uid, email: cleanEmail, full_name: data.full_name,
+    }, { onConflict: "id" });
+    if (profErr) throw new Error(`فشل إنشاء البروفايل: ${profErr.message}`);
 
-    // الآن احفظ الدور - يسمح بتكرار نفس الدور لعدة مستخدمين
+    // لو عندك عمود assigned_formation في profiles
+    if (data.assigned_formation) {
+      await supabaseAdmin.from("profiles").update({ assigned_formation: data.assigned_formation }).eq("id", uid);
+    }
+
     const { error: roleError } = await supabaseAdmin.from("user_roles").upsert({
       user_id: uid, role: data.role,
     }, { onConflict: "user_id,role" });
@@ -95,27 +95,23 @@ export const createUser = createServerFn({ method: "POST" })
 
     if (data.permissions.length > 0) {
       await supabaseAdmin.from("permissions").delete().eq("user_id", uid);
-      const { error: permErr } = await supabaseAdmin.from("permissions").insert(
-        data.permissions.map(p => ({...p, user_id: uid }))
-      );
-      if (permErr) throw new Error(`فشل حفظ الصلاحيات: ${permErr.message}`);
+      await supabaseAdmin.from("permissions").insert(data.permissions.map(p => ({...p, user_id: uid })));
     }
     return { ok: true, user_id: uid };
   });
 
-// باقي الدوال نفسها (list, update, reset, delete) تبقى كما هي...
 export const listUsers = createServerFn({ method: "GET" }).middleware([requireSupabaseAuth]).handler(async ({ context }) => {
   await assertAdmin(context.userId);
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { data: authList } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 200 });
   const { data: roles } = await supabaseAdmin.from("user_roles").select("user_id, role");
   const { data: perms } = await supabaseAdmin.from("permissions").select("*");
-  const { data: profs } = await supabaseAdmin.from("profiles").select("user_id, assigned_formation");
+  const { data: profs } = await supabaseAdmin.from("profiles").select("id, assigned_formation");
   return authList.users.map((u) => ({
     id: u.id, email: u.email, full_name: (u.user_metadata as any)?.full_name?? null, created_at: u.created_at,
     roles: (roles?? []).filter((r) => r.user_id === u.id).map((r) => r.role),
     permissions: (perms?? []).filter((p) => p.user_id === u.id),
-    assigned_formation: (profs?? []).find((p) => p.user_id === u.id)?.assigned_formation?? null,
+    assigned_formation: (profs?? []).find((p) => (p as any).id === u.id || (p as any).user_id === u.id)?.assigned_formation?? null,
   }));
 });
 
@@ -129,7 +125,7 @@ export const updateUserPermissions = createServerFn({ method: "POST" }).middlewa
     await supabaseAdmin.from("user_roles").delete().eq("user_id", data.user_id);
     await supabaseAdmin.from("user_roles").insert({ user_id: data.user_id, role: data.role });
   }
-  if (data.assigned_formation!== undefined) await supabaseAdmin.from("profiles").update({ assigned_formation: data.assigned_formation }).eq("user_id", data.user_id);
+  if (data.assigned_formation!== undefined) await supabaseAdmin.from("profiles").update({ assigned_formation: data.assigned_formation }).eq("id", data.user_id);
   await supabaseAdmin.from("permissions").delete().eq("user_id", data.user_id);
   if (data.permissions.length > 0) await supabaseAdmin.from("permissions").insert(data.permissions.map((p) => ({...p, user_id: data.user_id })));
   return { ok: true };
@@ -150,7 +146,7 @@ export const deleteUser = createServerFn({ method: "POST" }).middleware([require
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { data: roles } = await supabaseAdmin.from("user_roles").select("role").eq("user_id", data.user_id);
   if (roles?.some((r) => r.role === "owner")) throw new Error("لا يمكن حذف حساب المالك");
-  await supabaseAdmin.from("profiles").delete().eq("user_id", data.user_id);
+  await supabaseAdmin.from("profiles").delete().eq("id", data.user_id);
   await supabaseAdmin.from("user_roles").delete().eq("user_id", data.user_id);
   await supabaseAdmin.from("permissions").delete().eq("user_id", data.user_id);
   const { error } = await supabaseAdmin.auth.admin.deleteUser(data.user_id);
