@@ -43,8 +43,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => setSession(s));
-    supabase.auth.getSession().then(({ data }) => { setSession(data.session); setLoading(false); });
+    const { data: sub } = supabase.auth.onAuthStateChange(async (event, s) => {
+      setSession(s);
+      
+      // تسجيل الدخول تلقائياً مع حساب مدة الجلسة
+      if (event === 'SIGNED_IN' && s?.user) {
+        const key = `logged_${s.user.id}_${s.access_token.slice(-10)}`;
+        if (!sessionStorage.getItem(key)) {
+          try {
+            const now = new Date().toISOString();
+            localStorage.setItem('session_start', now);
+            localStorage.setItem(`session_start_${s.user.id}`, now);
+            sessionStorage.setItem(key, '1');
+            
+            await supabase.from("audit_log").insert({
+              user_id: s.user.id,
+              action: "sign_in",
+              entity: "auth",
+              entity_id: s.user.id,
+              details: { 
+                email: s.user.email,
+                session_start: now,
+                user_agent: navigator.userAgent
+              },
+            });
+          } catch {}
+        }
+      }
+    });
+    
+    supabase.auth.getSession().then(({ data }) => { 
+      setSession(data.session); 
+      setLoading(false);
+      if (data.session?.user && !localStorage.getItem('session_start')) {
+        localStorage.setItem('session_start', new Date().toISOString());
+      }
+    });
+    
     return () => sub.subscription.unsubscribe();
   }, []);
 
@@ -118,17 +153,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isPageVisible = (page: string) => {
     if (isAdmin) return true;
     const p = pageVisibility.find((x) => x.page_key === page);
-    if (!p) return true; // default visible unless explicitly hidden
+    if (!p) return true;
     return p.visible;
   };
 
   const signOut = async () => {
     if (user?.id) {
       try {
+        const sessionStart = localStorage.getItem(`session_start_${user.id}`) || localStorage.getItem('session_start');
+        const now = new Date();
+        let durationText = "";
+        let minutes = 0;
+        if (sessionStart) {
+          const diffMs = now.getTime() - new Date(sessionStart).getTime();
+          minutes = Math.floor(diffMs / 60000);
+          durationText = minutes < 60 ? `${minutes} دقيقة` : `${Math.floor(minutes/60)} ساعة و ${minutes%60} دقيقة`;
+        }
+
         await supabase.from("audit_log").insert({
-          user_id: user.id, action: "sign_out", entity: "auth", entity_id: user.id,
+          user_id: user.id,
+          action: "sign_out",
+          entity: "auth",
+          entity_id: user.id,
+          details: {
+            email: user.email,
+            session_start: sessionStart,
+            session_end: now.toISOString(),
+            duration_minutes: minutes,
+            duration_text: durationText
+          },
         });
-      } catch { /* ignore */ }
+      } catch {}
+      localStorage.removeItem('session_start');
+      localStorage.removeItem(`session_start_${user.id}`);
+      sessionStorage.clear();
     }
     await supabase.auth.signOut();
   };
@@ -146,5 +204,4 @@ export function useAuth() {
   return ctx;
 }
 
-// Re-export for backwards compatibility
 export type { ModuleKey } from "@/lib/constants";
