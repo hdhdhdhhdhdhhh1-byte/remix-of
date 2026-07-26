@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Printer, Image as ImageIcon, Eye, Calendar, Shield } from "lucide-react";
-import { exportElementAsImage, printElement } from "@/lib/export";
+import html2canvas from "html2canvas";
 
 export const Route = createFileRoute("/_authenticated/services/view")({
   component: ServicesViewPage,
@@ -26,7 +26,6 @@ function ServicesViewPage() {
   const { can, isAdmin } = useAuth();
   const canView = isAdmin || can("services_view", "view");
   const [searchDate, setSearchDate] = useState("");
-  const [openDate, setOpenDate] = useState<string | null>(null);
 
   const { data: services = [] } = useQuery({
     queryKey: ["services-approved"],
@@ -41,7 +40,7 @@ function ServicesViewPage() {
   const { data: persons = [] } = useQuery({
     queryKey: ["persons-all"],
     queryFn: async () => {
-      const { data } = await supabase.from("persons").select("id, full_name");
+      const { data, error } = await supabase.from("persons").select("id, full_name");
       if (error) throw error;
       return data as Person[];
     },
@@ -64,73 +63,204 @@ function ServicesViewPage() {
       {filteredDates.map(date => (
         <Card key={date} className="border-2"><CardHeader className="flex flex-row justify-between py-3">
           <CardTitle className="text-base flex gap-2"><Calendar className="h-4 w-4" /> {date}</CardTitle>
-          <Button size="sm" onClick={()=>setOpenDate(date)}><Eye className="h-4 w-4 ml-1" /> عرض النموذج الجديد</Button>
-        </CardHeader></Card>
+          <Button size="sm" onClick={()=>{ (document.getElementById(`dlg-${date}`) as any)?.click() }}> <Eye className="h-4 w-4 ml-1" /> عرض النموذج الجديد</Button>
+          <Dialog><DialogContent className="hidden" /></Dialog>
+        </CardHeader>
+          <div className="hidden"><DayServicesDialogWrapper date={date} services={byDate[date]??[]} personById={personById} triggerId={`dlg-${date}`} /></div>
+        </Card>
       ))}
-      <Dialog open={!!openDate} onOpenChange={v=>!v && setOpenDate(null)}>
-        {openDate && <DayServicesDialog date={openDate} services={byDate[openDate]??[]} personById={personById} />}
-      </Dialog>
+      {/* عرض مباشر بدون Dialog للتجربة */}
+      {filteredDates.map(date => (
+        <div key={`inline-${date}`} className="md:hidden"><DayInlinePreview date={date} services={byDate[date]??[]} personById={personById} /></div>
+      ))}
     </div>
   );
+}
+
+function DayServicesDialogWrapper({ date, services, personById, triggerId }: any) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button id={triggerId} className="hidden" onClick={()=>setOpen(true)} />
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DayServicesDialog date={date} services={services} personById={personById} />
+      </Dialog>
+    </>
+  )
+}
+
+function DayInlinePreview({ date, services, personById }: { date: string; services: ServiceRow[]; personById: (id: string|null)=>string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const dayName = useMemo(()=> new Date(date).toLocaleDateString("ar-EG", { weekday: "long" }), [date]);
+
+  const exportAsImage = async () => {
+    if (!ref.current) return;
+    const canvas = await html2canvas(ref.current, { scale: 3, backgroundColor: "#ffffff", useCORS: true });
+    const link = document.createElement("a");
+    link.download = `خدمات-${date}.png`;
+    link.href = canvas.toDataURL("image/png");
+    link.click();
+  };
+
+  const getLocationRow = (locName: string) => services.find(s => s.location === locName || s.location.includes(locName));
+  
+  const printEl = () => {
+    if (!ref.current) return;
+    const win = window.open("", "_blank");
+    if (!win) return;
+    win.document.write(`<html><head><title>${date}</title><style>body{margin:0}</style></head><body>${ref.current.outerHTML}</body></html>`);
+    win.document.close();
+    win.print();
+  };
+
+  const Block6 = ({ title, row }: { title: string; row?: ServiceRow }) => {
+    const members = row ? [row.member_1, row.member_2, row.member_3, row.member_4, row.member_5, row.member_6] : [];
+    // كمل 6 خانات
+    const filled = [...members, ...Array(6 - members.length).fill(null)].slice(0,6);
+    return (
+      <div className="mb-2">
+        <div className="bg-black text-white text-center py-1 font-black text-[11px]">{title}</div>
+        <div className="border-2 border-t-0 border-black bg-white">
+          {filled.map((mid,i)=>(
+            <div key={i} className="h-[28px] flex items-center px-2 border-b border-dashed border-gray-300 last:border-0 text-[11px] font-bold whitespace-nowrap overflow-hidden text-ellipsis">
+              <span className="w-4 text-[10px]">{i+1}-</span>
+              <span className="flex-1 truncate">{mid ? personById(mid) : "-"}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  };
+
+  const bawaba = getLocationRow("البوابة");
+  const tabba = getLocationRow("التبة");
+  const metras1 = getLocationRow("مترس 1");
+  const metras2 = getLocationRow("مترس 2");
+  const recipient = services[0]?.recipient;
+
+  return (
+    <div className="bg-[#f5f5f0] p-2 rounded-xl">
+      <div className="flex gap-2 justify-center mb-2">
+        <Button size="sm" className="bg-black text-white rounded-full" onClick={exportAsImage}><ImageIcon className="h-4 w-4 ml-1" /> حفظ كصورة</Button>
+        <Button size="sm" variant="outline" className="rounded-full border-black" onClick={printEl}><Printer className="h-4 w-4 ml-1" /> طباعة</Button>
+      </div>
+      <div ref={ref} className="bg-white text-black p-3 border-[3px] border-black rounded-[16px] w-full max-w-[380px] mx-auto" dir="rtl">
+        <div className="flex justify-between border-b-[2px] border-black pb-2 mb-2">
+          <div className="text-[11px] font-bold">{dayName} | {date}</div>
+          <div className="font-black text-[14px] flex gap-1 items-center"><Shield className="h-4 w-4" /> جدول خدمات الحراسة</div>
+        </div>
+        {/* 6 خانات لكل موقع = مضغوط */}
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <div className="bg-gray-100 border-2 border-black rounded-full text-center font-black text-[11px] py-1 mb-1">الفصيل الأول</div>
+            <Block6 title="البوابة" row={bawaba} />
+            <Block6 title="التبة" row={tabba} />
+          </div>
+          <div>
+            <div className="bg-gray-100 border-2 border-black rounded-full text-center font-black text-[11px] py-1 mb-1">الفصيلة الثانية</div>
+            <Block6 title="مترس 1" row={metras1} />
+            <Block6 title="مترس 2" row={metras2} />
+          </div>
+        </div>
+        {/* خانة المستلم */}
+        <div className="mt-3 border-2 border-black rounded-full px-3 py-1.5 flex gap-2 items-center bg-black text-white justify-center">
+          <span className="font-black text-[11px]">المستلم للقطاع:</span>
+          <span className="bg-white text-black px-4 rounded-full text-[11px] font-bold min-w-[80px] text-center">{recipient || "-"}</span>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 function DayServicesDialog({ date, services, personById }: { date: string; services: ServiceRow[]; personById: (id: string|null)=>string }) {
   const ref = useRef<HTMLDivElement>(null);
   const dayName = useMemo(()=> new Date(date).toLocaleDateString("ar-EG", { weekday: "long" }), [date]);
-  const fasil1 = services.filter(s =>!s.location.includes("مترس"));
-  const fasil2 = services.filter(s => s.location.includes("مترس"));
 
-  const renderBlock = (s: ServiceRow, numbered=false) => {
-    const members = [s.member_1, s.member_2, s.member_3, s.member_4, s.member_5, s.member_6].filter(Boolean);
+  const exportAsImage = async () => {
+    if (!ref.current) return;
+    try {
+      const canvas = await html2canvas(ref.current, { scale: 3, backgroundColor: "#ffffff", useCORS: true, logging: false });
+      const link = document.createElement("a");
+      link.download = `خدمات-${date}.png`;
+      link.href = canvas.toDataURL("image/png");
+      link.click();
+    } catch (e) {
+      alert("فشل الحفظ: " + e);
+    }
+  };
+
+  const printEl = () => {
+    if (!ref.current) return;
+    const win = window.open("", "_blank");
+    if (!win) return;
+    const styles = document.querySelectorAll("style, link[rel=stylesheet]");
+    let styleHtml = "";
+    styles.forEach(s => styleHtml += s.outerHTML);
+    win.document.write(`<html><head>${styleHtml}</head><body>${ref.current.outerHTML}</body></html>`);
+    win.document.close();
+    setTimeout(()=> win.print(), 500);
+  };
+
+  const getLocationRow = (locName: string) => services.find(s => s.location === locName || s.location.includes(locName));
+  const bawaba = getLocationRow("البوابة");
+  const tabba = getLocationRow("التبة");
+  const metras1 = getLocationRow("مترس 1");
+  const metras2 = getLocationRow("مترس 2");
+  const recipient = services[0]?.recipient;
+
+  const Block6 = ({ title, row }: { title: string; row?: ServiceRow }) => {
+    const members = row ? [row.member_1, row.member_2, row.member_3, row.member_4, row.member_5, row.member_6] : [];
+    const filled = [...members, ...Array(6 - members.length).fill(null)].slice(0,6);
     return (
-      <div key={s.id} className="mb-5">
-        <div className="bg-black text-white text-center py-1.5 rounded-t-lg font-black text-sm">{s.location}</div>
+      <div className="mb-2">
+        <div className="bg-black text-white text-center py-1.5 font-black text-[11px] rounded-t-lg">{title}</div>
         <div className="border-2 border-t-0 border-black rounded-b-lg bg-white">
-          {members.map((mid,i)=>(
-            <div key={i} className="flex gap-2 px-3 py-2 text-[14px] border-b border-dashed last:border-0">
-              {numbered && <span className="font-bold w-5">{i+1}-</span>}
-              <span className="font-bold">{personById(mid)}</span>
+          {filled.map((mid,i)=>(
+            <div key={i} className="h-[28px] flex items-center px-2 border-b border-dashed border-gray-300 last:border-0 text-[11px] font-bold whitespace-nowrap overflow-hidden">
+              <span className="w-4 text-[10px]">{i+1}-</span>
+              <span className="flex-1 truncate">{mid ? personById(mid) : "-"}</span>
             </div>
           ))}
         </div>
       </div>
-    );
+    )
   };
 
   return (
-    <DialogContent className="max-w-[900px] max-h-[95vh] overflow-y-auto bg-[#f5f5f0]">
-      <DialogHeader><DialogTitle className="text-center">معاينة الخدمات</DialogTitle></DialogHeader>
-      <div className="flex gap-2 justify-center mb-3 print:hidden">
-        <Button size="sm" className="bg-black text-white rounded-full px-6" onClick={()=> ref.current && exportElementAsImage(ref.current, `خدمات-${date}`)}>
+    <DialogContent className="max-w-[420px] max-h-[95vh] overflow-y-auto bg-[#f5f5f0]">
+      <DialogHeader><DialogTitle className="text-center text-sm">معاينة الخدمات - 6 خانات لكل موقع</DialogTitle></DialogHeader>
+      <div className="flex gap-2 justify-center mb-3">
+        <Button size="sm" className="bg-black text-white rounded-full px-6" onClick={exportAsImage}>
           <ImageIcon className="h-4 w-4 ml-2" /> حفظ كصورة
         </Button>
-        <Button size="sm" variant="outline" className="rounded-full px-6 border-2 border-black" onClick={()=> ref.current && printElement(ref.current)}>
+        <Button size="sm" variant="outline" className="rounded-full px-6 border-2 border-black" onClick={printEl}>
           <Printer className="h-4 w-4 ml-2" /> طباعة
         </Button>
       </div>
 
-      <div ref={ref} className="bg-white text-black p-6 border-[3px] border-black rounded-xl max-w-[800px] mx-auto" dir="rtl">
-        <div className="flex justify-between border-b-[3px] border-black pb-3 mb-4 font-bold">
-          <div className="text-sm">{dayName} <span className="mx-2">|</span> {date}</div>
-          <div className="flex gap-2 items-center font-black text-lg"><Shield className="h-5 w-5" /> جدول خدمات الحراسة</div>
+      <div ref={ref} className="bg-white text-black p-3 border-[3px] border-black rounded-[16px] w-[360px] mx-auto" dir="rtl">
+        <div className="flex justify-between border-b-[2px] border-black pb-2 mb-2">
+          <div className="text-[11px] font-bold">{dayName} | {date}</div>
+          <div className="font-black text-[13px] flex gap-1 items-center"><Shield className="h-4 w-4" /> خدمات الحراسة</div>
         </div>
-        <div className="grid grid-cols-2 gap-6">
-          <div className="border-l-2 border-dashed border-black pl-4">
-            <h3 className="text-center font-black bg-gray-100 border-2 border-black rounded-full py-1 mb-4">الفصيل الأول</h3>
-            {fasil1.map(s=> renderBlock(s, false))}
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <div className="bg-gray-100 border-2 border-black rounded-full text-center font-black text-[11px] py-1 mb-1">الفصيل الأول</div>
+            <Block6 title="البوابة" row={bawaba} />
+            <Block6 title="التبة" row={tabba} />
           </div>
-          <div className="pr-4">
-            <h3 className="text-center font-black bg-gray-100 border-2 border-black rounded-full py-1 mb-4">الفصيلة الثانية</h3>
-            {fasil2.map(s=> renderBlock(s, true))}
+          <div>
+            <div className="bg-gray-100 border-2 border-black rounded-full text-center font-black text-[11px] py-1 mb-1">الفصيلة الثانية</div>
+            <Block6 title="مترس 1" row={metras1} />
+            <Block6 title="مترس 2" row={metras2} />
           </div>
         </div>
-        <div className="mt-8 flex justify-center border-t-[3px] border-black pt-4">
-          <div className="bg-black text-white px-10 py-2 rounded-full font-black flex gap-4 text-[15px]">
-            <span>مستلم القطاع:</span>
-            <span className="bg-white text-black px-5 py-0.5 rounded-full">{services[0]?.recipient || "-"}</span>
-          </div>
+        <div className="mt-3 border-2 border-black rounded-full px-3 py-1.5 flex gap-2 items-center bg-black text-white justify-center">
+          <span className="font-black text-[11px]">المستلم للقطاع:</span>
+          <span className="bg-white text-black px-4 rounded-full text-[11px] font-bold min-w-[80px] text-center">{recipient || "-"}</span>
         </div>
       </div>
     </DialogContent>
   );
 }
+
