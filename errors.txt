@@ -1,0 +1,113 @@
+src/routes/_authenticated/reports.view.tsx(202,1): error TS1434: Unexpected keyword or identifier.
+src/routes/_authenticated/reports.view.tsx(202,5): error TS1434: Unexpected keyword or identifier.
+src/routes/_authenticated/reports.view.tsx(202,10): error TS1434: Unexpected keyword or identifier.
+src/routes/_authenticated/reports.view.tsx(202,17): error TS1434: Unexpected keyword or identifier.
+src/routes/_authenticated/reports.view.tsx(210,4): error TS1005: ':' expected.
+src/routes/_authenticated/reports.view.tsx(210,12): error TS1005: ',' expected.
+src/routes/_authenticated/reports.view.tsx(210,24): error TS1005: ',' expected.
+src/routes/_authenticated/reports.view.tsx(210,25): error TS1109: Expression expected.
+src/routes/_authenticated/reports.view.tsx(210,55): error TS1005: ';' expected.
+src/routes/_authenticated/reports.view.tsx(211,1): error TS1128: Declaration or statement expected.
+src/routes/_authenticated/reports.view.tsx(215,10): error TS1005: ')' expected.
+src/routes/_authenticated/reports.view.tsx(219,4): error TS1005: ')' expected.
+src/routes/_authenticated/reports.view.tsx(221,1): error TS1128: Declaration or statement expected.
+src/routes/_authenticated/reports.view.tsx(228,19): error TS1005: '}' expected.
+src/routes/_authenticated/reports.view.tsx(228,125): error TS1005: '...' expected.
+src/routes/_authenticated/reports.view.tsx(228,153): error TS1003: Identifier expected.
+src/routes/_authenticated/reports.view.tsx(230,1): error TS1005: ',' expected.
+src/routes/_authenticated/reports.view.tsx(230,3): error TS1005: ',' expected.
+src/routes/_authenticated/reports.view.tsx(232,1): error TS1005: ',' expected.
+src/routes/_authenticated/reports.view.tsx(232,3): error TS1005: ',' expected.
+src/routes/_authenticated/reports.view.tsx(239,2): error TS1128: Declaration or statement expected.
+src/routes/_authenticated/reports.view.tsx(239,3): error TS1128: Declaration or statement expected.
+src/routes/_authenticated/reports.view.tsx(243,7): error TS1005: ')' expected.
+src/routes/_authenticated/reports.view.tsx(243,117): error TS1005: ')' expected.
+src/routes/_authenticated/reports.view.tsx(243,125): error TS1434: Unexpected keyword or identifier.
+src/routes/_authenticated/reports.view.tsx(243,129): error TS1434: Unexpected keyword or identifier.
+src/routes/_authenticated/reports.view.tsx(243,138): error TS1128: Declaration or statement expected.
+src/routes/_authenticated/reports.view.tsx(245,52): error TS1109: Expression expected.
+src/routes/_authenticated/reports.view.tsx(245,60): error TS1005: ';' expected.
+src/routes/_authenticated/reports.view.tsx(245,149): error TS1128: Declaration or statement expected.
+src/routes/_authenticated/reports.view.tsx(245,150): error TS1109: Expression expected.
+src/routes/_authenticated/reports.view.tsx(245,156): error TS1005: ';' expected.
+src/routes/_authenticated/reports.view.tsx(245,210): error TS1005: ')' expected.
+src/routes/_authenticated/reports.view.tsx(245,219): error TS1434: Unexpected keyword or identifier.
+src/routes/_authenticated/reports.view.tsx(245,225): error TS1434: Unexpected keyword or identifier.
+src/routes/_authenticated/reports.view.tsx(245,231): error TS1434: Unexpected keyword or identifier.
+src/routes/_authenticated/reports.view.tsx(245,240): error TS1434: Unexpected keyword or identifier.
+src/routes/_authenticated/reports.view.tsx(245,245): error TS1434: Unexpected keyword or identifier.
+src/routes/_authenticated/reports.view.tsx(245,249): error TS1434: Unexpected keyword or identifier.
+src/routes/_authenticated/reports.view.tsx(245,257): error TS1434: Unexpected keyword or identifier.
+src/routes/_authenticated/reports.view.tsx(245,265): error TS1434: Unexpected keyword or identifier.
+src/routes/_authenticated/reports.view.tsx(245,278): error TS1005: ';' expected.
+src/routes/_authenticated/reports.view.tsx(245,287): error TS1127: Invalid character.
+src/routes/_authenticated/reports.view.tsx(245,289): error TS1434: Unexpected keyword or identifier.
+src/routes/_authenticated/reports.view.tsx(245,314): error TS1109: Expression expected.
+src/routes/_authenticated/reports.view.tsx(245,321): error TS1005: ';' expected.
+src/routes/_authenticated/reports.view.tsx(245,322): error TS1128: Declaration or statement expected.
+src/routes/_authenticated/reports.view.tsx(253,1): error TS1434: Unexpected keyword or identifier.
+src/routes/_authenticated/reports.view.tsx(253,5): error TS1434: Unexpected keyword or identifier.
+src/routes/_authenticated/reports.view.tsx(253,10): error TS1434: Unexpected keyword or identifier.
+src/routes/_authenticated/reports.view.tsx(255,1): error TS1434: Unexpected keyword or identifier.
+src/routes/_authenticated/reports.view.tsx(255,7): error TS1434: Unexpected keyword or identifier.
+src/routes/_authenticated/reports.view.tsx(255,12): error TS1434: Unexpected keyword or identifier.
+src/routes/_authenticated/reports.view.tsx(257,1): error TS1434: Unexpected keyword or identifier.
+src/routes/_authenticated/reports.view.tsx(259,1): error TS1434: Unexpected keyword or identifier.
+src/routes/_authenticated/reports.view.tsx(259,7): error TS1434: Unexpected keyword or identifier.
+src/routes/_authenticated/reports.view.tsx(259,12): error TS1434: Unexpected keyword or identifier.
+src/routes/_authenticated/reports.view.tsx(259,19): error TS1434: Unexpected keyword or identifier.
+src/routes/_authenticated/reports.view.tsx(261,1): error TS1434: Unexpected keyword or identifier.
+src/routes/_authenticated/reports.view.tsx(261,7): error TS1434: Unexpected keyword or identifier.
+src/routes/_authenticated/reports.view.tsx(263,1): error TS1434: Unexpected keyword or identifier.
+src/routes/_authenticated/reports.view.tsx(263,6): error TS1434: Unexpected keyword or identifier.
+src/routes/_authenticated/reports.view.tsx(265,1): error TS1434: Unexpected keyword or identifier.
+src/routes/_authenticated/reports.view.tsx(265,7): error TS1434: Unexpected keyword or identifier.
+src/routes/_authenticated/reports.view.tsx(265,16): error TS1434: Unexpected keyword or identifier.
+src/routes/_authenticated/reports.view.tsx(267,1): error TS1434: Unexpected keyword or identifier.
+src/routes/_authenticated/reports.view.tsx(267,8): error TS1434: Unexpected keyword or identifier.
+src/routes/_authenticated/reports.view.tsx(267,31): error TS1434: Unexpected keyword or identifier.
+src/routes/_authenticated/reports.view.tsx(267,92): error TS1005: ',' expected.
+src/routes/_authenticated/reports.view.tsx(267,95): error TS1005: ')' expected.
+src/routes/_authenticated/reports.view.tsx(267,233): error TS1128: Declaration or statement expected.
+src/routes/_authenticated/reports.view.tsx(267,234): error TS1128: Declaration or statement expected.
+src/routes/_authenticated/reports.view.tsx(267,235): error TS1128: Declaration or statement expected.
+src/routes/_authenticated/reports.view.tsx(267,237): error TS1434: Unexpected keyword or identifier.
+src/routes/_authenticated/reports.view.tsx(269,16): error TS1005: ',' expected.
+src/routes/_authenticated/reports.view.tsx(269,22): error TS1005: ',' expected.
+src/routes/_authenticated/reports.view.tsx(271,1): error TS1434: Unexpected keyword or identifier.
+src/routes/_authenticated/reports.view.tsx(271,8): error TS1434: Unexpected keyword or identifier.
+src/routes/_authenticated/reports.view.tsx(271,14): error TS1434: Unexpected keyword or identifier.
+src/routes/_authenticated/reports.view.tsx(271,21): error TS1434: Unexpected keyword or identifier.
+src/routes/_authenticated/reports.view.tsx(271,28): error TS1434: Unexpected keyword or identifier.
+src/routes/_authenticated/reports.view.tsx(271,612): error TS1005: ')' expected.
+src/routes/_authenticated/reports.view.tsx(271,617): error TS1434: Unexpected keyword or identifier.
+src/routes/_authenticated/reports.view.tsx(271,624): error TS1128: Declaration or statement expected.
+src/routes/_authenticated/reports.view.tsx(275,8): error TS1005: ')' expected.
+src/routes/_authenticated/reports.view.tsx(277,1): error TS1128: Declaration or statement expected.
+src/routes/_authenticated/reports.view.tsx(279,1): error TS1434: Unexpected keyword or identifier.
+src/routes/_authenticated/reports.view.tsx(279,7): error TS1434: Unexpected keyword or identifier.
+src/routes/_authenticated/reports.view.tsx(281,1): error TS1434: Unexpected keyword or identifier.
+src/routes/_authenticated/reports.view.tsx(283,1): error TS1128: Declaration or statement expected.
+src/routes/_authenticated/reports.view.tsx(283,3): error TS1128: Declaration or statement expected.
+src/routes/_authenticated/reports.view.tsx(283,12): error TS1005: ')' expected.
+src/routes/_authenticated/reports.view.tsx(283,20): error TS1434: Unexpected keyword or identifier.
+src/routes/_authenticated/reports.view.tsx(283,23): error TS1434: Unexpected keyword or identifier.
+src/routes/_authenticated/reports.view.tsx(283,31): error TS1434: Unexpected keyword or identifier.
+src/routes/_authenticated/reports.view.tsx(283,37): error TS1128: Declaration or statement expected.
+src/routes/_authenticated/reports.view.tsx(283,38): error TS1128: Declaration or statement expected.
+src/routes/_authenticated/reports.view.tsx(285,1): error TS1128: Declaration or statement expected.
+src/routes/_authenticated/reports.view.tsx(286,1): error TS1128: Declaration or statement expected.
+src/routes/_authenticated/reports.view.tsx(289,9): error TS17008: JSX element 'th' has no corresponding closing tag.
+src/routes/_authenticated/reports.view.tsx(290,1): error TS1381: Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+src/routes/_authenticated/reports.view.tsx(291,61): error TS1109: Expression expected.
+src/routes/_authenticated/reports.view.tsx(291,78): error TS1005: '}' expected.
+src/routes/_authenticated/reports.view.tsx(291,131): error TS1381: Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+src/routes/_authenticated/reports.view.tsx(292,1): error TS1109: Expression expected.
+src/routes/_authenticated/reports.view.tsx(292,9): error TS17008: JSX element 'td' has no corresponding closing tag.
+src/routes/_authenticated/reports.view.tsx(293,1): error TS1381: Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+src/routes/_authenticated/reports.view.tsx(298,24): error TS1003: Identifier expected.
+src/routes/_authenticated/reports.view.tsx(298,31): error TS1382: Unexpected token. Did you mean `{'>'}` or `&gt;`?
+src/routes/_authenticated/reports.view.tsx(300,1): error TS1109: Expression expected.
+src/routes/_authenticated/reports.view.tsx(301,22): error TS1382: Unexpected token. Did you mean `{'>'}` or `&gt;`?
+src/routes/_authenticated/reports.view.tsx(306,1): error TS1381: Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+src/routes/_authenticated/reports.view.tsx(309,1): error TS1005: '</' expected.
