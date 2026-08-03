@@ -2,5 +2,10 @@
   command = "npm run build"
   publish = ".output/public"
 
-[build.environment]
-  NODE_VERSION = "26"
+[functions]
+  directory = ".netlify/functions-internal"
+
+[[redirects]]
+  from = "/*"
+  to = "/.netlify/functions/server"
+  status = 200
