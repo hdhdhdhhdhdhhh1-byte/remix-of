@@ -35,3 +35,4 @@ dist-ssr
 .lovable/
 supabase/
 bun.lockb
+.env
