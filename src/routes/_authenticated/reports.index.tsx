@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { getReportByDate, getLastApprovedReportBefore, saveOfflineReport } from "@/lib/offline/repository/reports.repository";
 import { useAuth } from "@/lib/auth-context";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -14,6 +15,9 @@ import { toast } from "sonner";
 import { Save, CheckCircle2, PenLine, Trash, RotateCcw, Image as ImageIcon } from "lucide-react";
 import { STATUS_LABEL, ATTENDANCE_STATUSES, type AttendanceStatus } from "@/lib/constants";
 import logoUrl from "@/assets/resistance-logo.jpg";
+
+const isOnline = () =>
+  typeof navigator !== "undefined" && navigator.onLine;
 
 export const Route = createFileRoute("/_authenticated/reports/")({ component: ReportsPage, });
 interface Person { id: string; full_name: string; military_rank: string | null; formation: string | null; military_number: string | null; }
@@ -94,25 +98,14 @@ function ReportsPage() {
   const { data: report, isLoading: reportLoading } = useQuery({
     queryKey: ["report", reportDate],
     queryFn: async () => {
-      const { data } = await supabase.from("daily_reports").select("*, report_entries(*)").eq("report_date", reportDate).maybeSingle();
-      return data;
+      return await getReportByDate(reportDate);
     },
   });
 
   const { data: lastReport, isLoading: lastLoading } = useQuery({
     queryKey: ["last-approved-report-before", reportDate],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("daily_reports")
-        .select("id, report_date, approved_at, report_entries(person_id, status, note)")
-        .lt("report_date", reportDate)
-        .not("approved_at", "is", null)
-        .order("report_date", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (error) throw error;
-      return data;
+      return await getLastApprovedReportBefore(reportDate);
     },
   });
 
@@ -194,8 +187,35 @@ function ReportsPage() {
   const saveMut = useMutation({
     mutationFn: async () => {
       if (!canSave) throw new Error("ليس لديك صلاحية الحفظ");
+
+      if (!isOnline()) {
+        const reportId = crypto.randomUUID();
+
+        const offlineReport = {
+          id: reportId,
+          report_date: reportDate,
+          notes,
+          commander_signature: commanderSig,
+          created_by: user?.id ?? null,
+          status: "pending",
+          approved_at: null,
+          approved_by: null,
+        };
+
+        const rows = Object.entries(entries).map(([person_id, v]) => ({
+          id: crypto.randomUUID(),
+          report_id: reportId,
+          person_id,
+          status: v.status,
+          note: v.note || null,
+        }));
+
+        await saveOfflineReport(offlineReport, rows);
+        return;
+      }
+
       let reportId = report?.id as string | undefined;
-      if (!reportId) {
+if (!reportId) {
         const { data, error } = await supabase.from("daily_reports").insert({ report_date: reportDate, notes, commander_signature: commanderSig, created_by: user?.id }).select().single();
         if (error) throw error; reportId = data.id;
       } else {

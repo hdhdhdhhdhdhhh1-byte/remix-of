@@ -21,8 +21,22 @@ interface AuthCtx {
 const Ctx = createContext<AuthCtx | null>(null);
 
 // Helpers لحفظ/استرجاع بدون نت
-function cacheSet(key: string, val: any) { try { localStorage.setItem(key, JSON.stringify(val)); } catch {} }
-function cacheGet<T>(key: string): T | null { try { const v = localStorage.getItem(key); return v? JSON.parse(v) : null; } catch { return null; } }
+function cacheSet(key: string, val: any) {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(key, JSON.stringify(val));
+  } catch {}
+}
+
+function cacheGet<T>(key: string): T | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const v = localStorage.getItem(key);
+    return v ? JSON.parse(v) : null;
+  } catch {
+    return null;
+  }
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
@@ -64,7 +78,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } else {
         // بدون نت وبدون جلسة supabase -> جرب استرجاع من الكاش المحلي
         const cached = cacheGet<Session>('offline_session');
-        if (cached) setSession(cached);
+        // تم تعطيل استرجاع الجلسة بدون نت
+          setSession(null);
       }
       setLoading(false);
       if (data.session?.user && !localStorage.getItem('session_start')) {
@@ -75,7 +90,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => sub.subscription.unsubscribe();
   }, []);
 
-  const user = session?.user ?? (cacheGet<User>('offline_user') as any) ?? null;
+  const user = session?.user ?? null;
 
   const { data: role } = useQuery({
     queryKey: ["my_role", user?.id],
