@@ -4,7 +4,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 const OWNER_EMAIL = "shafiqalwatiry@gmail.com";
 
-// دالة التسجيل في سجل العمليات - تشتغل من السيرفر مباشرة (آمنة)
+// دالة التسجيل في سجل العمليات
 async function serverLogActivity(params: {
   userId?: string | null;
   action: string;
@@ -36,7 +36,10 @@ export const ensureOwner = createServerFn({ method: "POST" }).handler(async () =
 
   if (!ownerUser) {
     const { data: created } = await supabaseAdmin.auth.admin.createUser({
-      email: OWNER_EMAIL, password, email_confirm: true, user_metadata: { full_name: "المالك" },
+      email: OWNER_EMAIL,
+      password,
+      email_confirm: true,
+      user_metadata: { full_name: "المالك" },
     });
     ownerUser = created.user!;
   }
@@ -55,31 +58,65 @@ async function assertAdmin(userId: string) {
 }
 
 const PermSchema = z.object({
-  module: z.string(), can_view: z.boolean(), can_edit: z.boolean(), can_approve: z.boolean(),
-  can_add: z.boolean().optional().default(false), can_delete: z.boolean().optional().default(false),
-  can_print: z.boolean().optional().default(false), can_export_pdf: z.boolean().optional().default(false),
-  can_export_image: z.boolean().optional().default(false), can_cancel_approval: z.boolean().optional().default(false),
+  module: z.string(),
+  can_view: z.boolean(),
+  can_edit: z.boolean(),
+  can_approve: z.boolean(),
+  can_add: z.boolean().optional().default(false),
+  can_delete: z.boolean().optional().default(false),
+  can_print: z.boolean().optional().default(false),
+  can_export_pdf: z.boolean().optional().default(false),
+  can_export_image: z.boolean().optional().default(false),
+  can_cancel_approval: z.boolean().optional().default(false),
+  can_sign: z.boolean().optional().default(false),
 });
 const RoleEnum = z.enum(["admin", "leader", "viewer", "platoon_leader", "office", "battery_commander", "manager"]);
 const CreateUserInput = z.object({
-  email: z.string().email(), password: z.string().min(6), full_name: z.string().min(1),
-  role: RoleEnum, assigned_formation: z.string().optional().nullable(), permissions: z.array(PermSchema),
+  email: z.string().email(),
+  password: z.string().min(6),
+  full_name: z.string().min(1),
+  role: RoleEnum,
+  assigned_formation: z.string().optional().nullable(),
+  permissions: z.array(PermSchema),
 });
 
 export const createUser = createServerFn({ method: "POST" })
-.middleware([requireSupabaseAuth])
-.inputValidator((input) => CreateUserInput.parse(input))
-.handler(async ({ data, context }) => {
+ .middleware([requireSupabaseAuth])
+ .inputValidator((input) => CreateUserInput.parse(input))
+ .handler(async ({ data, context }) => {
     await assertAdmin(context.userId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const cleanEmail = data.email.trim().toLowerCase();
 
+    let uid: string;
+    let isRecovered = false;
+
     const { data: created, error } = await supabaseAdmin.auth.admin.createUser({
-      email: cleanEmail, password: data.password, email_confirm: true,
+      email: cleanEmail,
+      password: data.password,
+      email_confirm: true,
       user_metadata: { full_name: data.full_name },
     });
-    if (error) throw new Error(error.message);
-    const uid = created.user!.id;
+
+    if (error) {
+      // إذا الإيميل موجود مسبقاً - نستعيده ونحدث بياناته بدلاً من الفشل
+      if (error.message.toLowerCase().includes("already") || error.message.includes("registered") || (error as any).code === "email_exists") {
+        const { data: list } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+        const existing = list.users.find((u) => u.email?.toLowerCase() === cleanEmail);
+        if (!existing) throw new Error("البريد مسجل لكن لا يمكن استرجاعه - احذفه من Authentication > Users");
+        uid = existing.id;
+        isRecovered = true;
+        // حدث كلمة السر والاسم
+        await supabaseAdmin.auth.admin.updateUserById(uid, {
+          password: data.password,
+          user_metadata: { full_name: data.full_name },
+        });
+      } else {
+        throw new Error(error.message);
+      }
+    } else {
+      uid = created.user!.id;
+    }
 
     await supabaseAdmin.from("profiles").upsert({ id: uid, email: cleanEmail, full_name: data.full_name }, { onConflict: "id" });
 
@@ -91,67 +128,98 @@ export const createUser = createServerFn({ method: "POST" })
 
     if (data.permissions.length > 0) {
       await supabaseAdmin.from("permissions").delete().eq("user_id", uid);
-      await supabaseAdmin.from("permissions").insert(data.permissions.map(p => ({...p, user_id: uid })));
+      await supabaseAdmin.from("permissions").insert(data.permissions.map((p) => ({...p, user_id: uid })));
     }
 
-    // تسجيل في سجل العمليات
-    await serverLogActivity({ userId: context.userId, action: 'create', entity: 'users', entity_id: uid, details: { email: cleanEmail, role: data.role, formation: data.assigned_formation } });
+    await serverLogActivity({
+      userId: context.userId,
+      action: isRecovered? "update" : "create",
+      entity: "users",
+      entity_id: uid,
+      details: { email: cleanEmail, role: data.role, formation: data.assigned_formation, recovered: isRecovered },
+    });
 
-    return { ok: true, user_id: uid };
+    return { ok: true, user_id: uid, recovered: isRecovered };
   });
 
-export const listUsers = createServerFn({ method: "GET" }).middleware([requireSupabaseAuth]).handler(async ({ context }) => {
-  await assertAdmin(context.userId);
-  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  const { data: authList } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 200 });
-  const { data: roles } = await supabaseAdmin.from("user_roles").select("user_id, role");
-  const { data: perms } = await supabaseAdmin.from("permissions").select("*");
-  const { data: profs } = await supabaseAdmin.from("profiles").select("id, assigned_formation");
-  return authList.users.map((u) => ({
-    id: u.id, email: u.email, full_name: (u.user_metadata as any)?.full_name?? null, created_at: u.created_at,
-    roles: (roles?? []).filter((r) => r.user_id === u.id).map((r) => r.role),
-    permissions: (perms?? []).filter((p) => p.user_id === u.id),
-    assigned_formation: (profs?? []).find((p) => (p as any).id === u.id)?.assigned_formation?? null,
-  }));
+export const listUsers = createServerFn({ method: "GET" })
+ .middleware([requireSupabaseAuth])
+ .handler(async ({ context }) => {
+    await assertAdmin(context.userId);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: authList } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+    const { data: roles } = await supabaseAdmin.from("user_roles").select("user_id, role");
+    const { data: perms } = await supabaseAdmin.from("permissions").select("*");
+    const { data: profs } = await supabaseAdmin.from("profiles").select("id, assigned_formation");
+    return authList.users.map((u) => ({
+      id: u.id,
+      email: u.email,
+      full_name: (u.user_metadata as any)?.full_name?? null,
+      created_at: u.created_at,
+      roles: (roles?? []).filter((r) => r.user_id === u.id).map((r) => r.role),
+      permissions: (perms?? []).filter((p) => p.user_id === u.id),
+      assigned_formation: (profs?? []).find((p) => (p as any).id === u.id)?.assigned_formation?? null,
+    }));
+  });
+
+const UpdatePermsInput = z.object({
+  user_id: z.string().uuid(),
+  role: RoleEnum.optional(),
+  assigned_formation: z.string().optional().nullable(),
+  permissions: z.array(PermSchema),
 });
+export const updateUserPermissions = createServerFn({ method: "POST" })
+ .middleware([requireSupabaseAuth])
+ .inputValidator((i) => UpdatePermsInput.parse(i))
+ .handler(async ({ data, context }) => {
+    await assertAdmin(context.userId);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    await supabaseAdmin.from("user_roles").delete().eq("user_id", data.user_id);
+    if (data.role) await supabaseAdmin.from("user_roles").insert({ user_id: data.user_id, role: data.role });
+    if (data.assigned_formation!== undefined)
+      await supabaseAdmin.from("profiles").update({ assigned_formation: data.assigned_formation }).eq("id", data.user_id);
+    await supabaseAdmin.from("permissions").delete().eq("user_id", data.user_id);
+    if (data.permissions.length > 0) await supabaseAdmin.from("permissions").insert(data.permissions.map((p) => ({...p, user_id: data.user_id })));
 
-const UpdatePermsInput = z.object({ user_id: z.string().uuid(), role: RoleEnum.optional(), assigned_formation: z.string().optional().nullable(), permissions: z.array(PermSchema) });
-export const updateUserPermissions = createServerFn({ method: "POST" }).middleware([requireSupabaseAuth]).inputValidator((i) => UpdatePermsInput.parse(i)).handler(async ({ data, context }) => {
-  await assertAdmin(context.userId);
-  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  await supabaseAdmin.from("user_roles").delete().eq("user_id", data.user_id);
-  if (data.role) await supabaseAdmin.from("user_roles").insert({ user_id: data.user_id, role: data.role });
-  if (data.assigned_formation!== undefined) await supabaseAdmin.from("profiles").update({ assigned_formation: data.assigned_formation }).eq("id", data.user_id);
-  await supabaseAdmin.from("permissions").delete().eq("user_id", data.user_id);
-  if (data.permissions.length > 0) await supabaseAdmin.from("permissions").insert(data.permissions.map((p) => ({...p, user_id: data.user_id })));
+    await serverLogActivity({
+      userId: context.userId,
+      action: "update",
+      entity: "users",
+      entity_id: data.user_id,
+      details: { role: data.role, formation: data.assigned_formation, perms_count: data.permissions.length },
+    });
 
-  await serverLogActivity({ userId: context.userId, action: 'update', entity: 'users', entity_id: data.user_id, details: { role: data.role, formation: data.assigned_formation, perms_count: data.permissions.length } });
-
-  return { ok: true };
-});
+    return { ok: true };
+  });
 
 const ResetPasswordInput = z.object({ user_id: z.string().uuid(), password: z.string().min(6) });
-export const resetUserPassword = createServerFn({ method: "POST" }).middleware([requireSupabaseAuth]).inputValidator((i) => ResetPasswordInput.parse(i)).handler(async ({ data, context }) => {
-  await assertAdmin(context.userId);
-  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  const { error } = await supabaseAdmin.auth.admin.updateUserById(data.user_id, { password: data.password });
-  if (error) throw new Error(error.message);
+export const resetUserPassword = createServerFn({ method: "POST" })
+ .middleware([requireSupabaseAuth])
+ .inputValidator((i) => ResetPasswordInput.parse(i))
+ .handler(async ({ data, context }) => {
+    await assertAdmin(context.userId);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { error } = await supabaseAdmin.auth.admin.updateUserById(data.user_id, { password: data.password });
+    if (error) throw new Error(error.message);
 
-  await serverLogActivity({ userId: context.userId, action: 'update', entity: 'users', entity_id: data.user_id, details: { action: 'reset_password' } });
+    await serverLogActivity({ userId: context.userId, action: "update", entity: "users", entity_id: data.user_id, details: { action: "reset_password" } });
 
-  return { ok: true };
-});
+    return { ok: true };
+  });
 
 const DeleteUserInput = z.object({ user_id: z.string().uuid() });
-export const deleteUser = createServerFn({ method: "POST" }).middleware([requireSupabaseAuth]).inputValidator((i) => DeleteUserInput.parse(i)).handler(async ({ data, context }) => {
-  await assertAdmin(context.userId);
-  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+export const deleteUser = createServerFn({ method: "POST" })
+ .middleware([requireSupabaseAuth])
+ .inputValidator((i) => DeleteUserInput.parse(i))
+ .handler(async ({ data, context }) => {
+    await assertAdmin(context.userId);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
-  await serverLogActivity({ userId: context.userId, action: 'delete', entity: 'users', entity_id: data.user_id });
+    await serverLogActivity({ userId: context.userId, action: "delete", entity: "users", entity_id: data.user_id });
 
-  await supabaseAdmin.from("profiles").delete().eq("id", data.user_id);
-  await supabaseAdmin.from("user_roles").delete().eq("user_id", data.user_id);
-  await supabaseAdmin.from("permissions").delete().eq("user_id", data.user_id);
-  await supabaseAdmin.auth.admin.deleteUser(data.user_id);
-  return { ok: true };
-});
+    await supabaseAdmin.from("permissions").delete().eq("user_id", data.user_id);
+    await supabaseAdmin.from("user_roles").delete().eq("user_id", data.user_id);
+    await supabaseAdmin.from("profiles").delete().eq("id", data.user_id);
+    await supabaseAdmin.auth.admin.deleteUser(data.user_id);
+    return { ok: true };
+  });

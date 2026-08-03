@@ -15,7 +15,7 @@ import { Save, CheckCircle2, PenLine, Trash, RotateCcw, Image as ImageIcon } fro
 import { STATUS_LABEL, ATTENDANCE_STATUSES, type AttendanceStatus } from "@/lib/constants";
 import logoUrl from "@/assets/resistance-logo.jpg";
 
-export const Route = createFileRoute("/_authenticated/reports/")({ component: ReportsPage, });
+export const Route = createFileRoute("/_authenticated/reports/index/backup")({ component: ReportsPage, });
 interface Person { id: string; full_name: string; military_rank: string | null; formation: string | null; military_number: string | null; }
 const PRINT_ROWS: string[] = ["الضباط", "ف١", "ف٢", "ق س", "ق ك"];
 const ARABIC_WEEKDAYS = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
@@ -133,38 +133,13 @@ function ReportsPage() {
     }
     if (lastReport) {
       const map: Record<string, { status: AttendanceStatus; note: string }> = {};
-
-      const ents = (lastReport.report_entries ?? []) as {
-        person_id: string;
-        status: AttendanceStatus;
-        note: string | null;
-      }[];
-
+      const ents = (lastReport.report_entries?? []) as { person_id: string; status: AttendanceStatus; note: string | null }[];
       const lastMap: Record<string, { status: AttendanceStatus; note: string }> = {};
-
-      ents.forEach((e) => {
-        lastMap[e.person_id] = {
-          status: e.status,
-          note: e.note ?? ""
-        };
-      });
-
-      persons.forEach((p) => {
-        map[p.id] = lastMap[p.id] ?? {
-          status: "present",
-          note: ""
-        };
-      });
-
-      // لا يوجد تقرير لهذا التاريخ:
-      // نستخدم آخر تقرير معتمد كأساس لكشف الأفراد فقط
-      // الإحصائيات ستقرأ من entries الحالية
-      // المتغيرات تبدأ فارغة لهذا اليوم
-
+      ents.forEach((e) => { lastMap[e.person_id] = { status: e.status, note: e.note?? "" }; });
+      persons.forEach((p) => { map[p.id] = lastMap[p.id]?? { status: "present", note: "" }; });
       setEntries(map);
       setInitialEntries(structuredClone(map));
       setNotes("");
-
       return;
     }
     const def: Record<string, { status: AttendanceStatus; note: string }> = {};

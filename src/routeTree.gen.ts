@@ -25,8 +25,11 @@ import { Route as AuthenticatedUsersRouteImport } from './routes/_authenticated/
 import { Route as AuthenticatedWeaponsRouteImport } from './routes/_authenticated/weapons'
 import { Route as AuthenticatedReportsIndexRouteImport } from './routes/_authenticated/reports.index'
 import { Route as AuthenticatedReportsViewRouteImport } from './routes/_authenticated/reports.view'
+import { Route as AuthenticatedRouteBackupRouteImport } from './routes/_authenticated/route.backup'
+import { Route as AuthenticatedRouteOldRouteImport } from './routes/_authenticated/route.old'
 import { Route as AuthenticatedServicesIndexRouteImport } from './routes/_authenticated/services.index'
 import { Route as AuthenticatedServicesViewRouteImport } from './routes/_authenticated/services.view'
+import { Route as AuthenticatedReportsIndexBackupRouteImport } from './routes/_authenticated/reports.index.backup'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -109,6 +112,17 @@ const AuthenticatedReportsViewRoute =
     path: '/view',
     getParentRoute: () => AuthenticatedReportsRoute,
   } as any)
+const AuthenticatedRouteBackupRoute =
+  AuthenticatedRouteBackupRouteImport.update({
+    id: '/route/backup',
+    path: '/route/backup',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedRouteOldRoute = AuthenticatedRouteOldRouteImport.update({
+  id: '/route/old',
+  path: '/route/old',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedServicesIndexRoute =
   AuthenticatedServicesIndexRouteImport.update({
     id: '/',
@@ -120,6 +134,12 @@ const AuthenticatedServicesViewRoute =
     id: '/view',
     path: '/view',
     getParentRoute: () => AuthenticatedServicesRoute,
+  } as any)
+const AuthenticatedReportsIndexBackupRoute =
+  AuthenticatedReportsIndexBackupRouteImport.update({
+    id: '/index/backup',
+    path: '/index/backup',
+    getParentRoute: () => AuthenticatedReportsRoute,
   } as any)
 
 export interface FileRoutesByFullPath {
@@ -136,10 +156,13 @@ export interface FileRoutesByFullPath {
   '/services': typeof AuthenticatedServicesRouteWithChildren
   '/users': typeof AuthenticatedUsersRoute
   '/weapons': typeof AuthenticatedWeaponsRoute
+  '/route/backup': typeof AuthenticatedRouteBackupRoute
+  '/route/old': typeof AuthenticatedRouteOldRoute
   '/reports/view': typeof AuthenticatedReportsViewRoute
   '/services/view': typeof AuthenticatedServicesViewRoute
   '/reports/': typeof AuthenticatedReportsIndexRoute
   '/services/': typeof AuthenticatedServicesIndexRoute
+  '/reports/index/backup': typeof AuthenticatedReportsIndexBackupRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -153,10 +176,13 @@ export interface FileRoutesByTo {
   '/persons': typeof AuthenticatedPersonsRoute
   '/users': typeof AuthenticatedUsersRoute
   '/weapons': typeof AuthenticatedWeaponsRoute
+  '/route/backup': typeof AuthenticatedRouteBackupRoute
+  '/route/old': typeof AuthenticatedRouteOldRoute
   '/reports/view': typeof AuthenticatedReportsViewRoute
   '/services/view': typeof AuthenticatedServicesViewRoute
   '/reports': typeof AuthenticatedReportsIndexRoute
   '/services': typeof AuthenticatedServicesIndexRoute
+  '/reports/index/backup': typeof AuthenticatedReportsIndexBackupRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -174,10 +200,13 @@ export interface FileRoutesById {
   '/_authenticated/services': typeof AuthenticatedServicesRouteWithChildren
   '/_authenticated/users': typeof AuthenticatedUsersRoute
   '/_authenticated/weapons': typeof AuthenticatedWeaponsRoute
+  '/_authenticated/route/backup': typeof AuthenticatedRouteBackupRoute
+  '/_authenticated/route/old': typeof AuthenticatedRouteOldRoute
   '/_authenticated/reports/view': typeof AuthenticatedReportsViewRoute
   '/_authenticated/services/view': typeof AuthenticatedServicesViewRoute
   '/_authenticated/reports/': typeof AuthenticatedReportsIndexRoute
   '/_authenticated/services/': typeof AuthenticatedServicesIndexRoute
+  '/_authenticated/reports/index/backup': typeof AuthenticatedReportsIndexBackupRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -195,10 +224,13 @@ export interface FileRouteTypes {
     | '/services'
     | '/users'
     | '/weapons'
+    | '/route/backup'
+    | '/route/old'
     | '/reports/view'
     | '/services/view'
     | '/reports/'
     | '/services/'
+    | '/reports/index/backup'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -212,10 +244,13 @@ export interface FileRouteTypes {
     | '/persons'
     | '/users'
     | '/weapons'
+    | '/route/backup'
+    | '/route/old'
     | '/reports/view'
     | '/services/view'
     | '/reports'
     | '/services'
+    | '/reports/index/backup'
   id:
     | '__root__'
     | '/'
@@ -232,10 +267,13 @@ export interface FileRouteTypes {
     | '/_authenticated/services'
     | '/_authenticated/users'
     | '/_authenticated/weapons'
+    | '/_authenticated/route/backup'
+    | '/_authenticated/route/old'
     | '/_authenticated/reports/view'
     | '/_authenticated/services/view'
     | '/_authenticated/reports/'
     | '/_authenticated/services/'
+    | '/_authenticated/reports/index/backup'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -359,6 +397,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedReportsViewRouteImport
       parentRoute: typeof AuthenticatedReportsRoute
     }
+    '/_authenticated/route/backup': {
+      id: '/_authenticated/route/backup'
+      path: '/route/backup'
+      fullPath: '/route/backup'
+      preLoaderRoute: typeof AuthenticatedRouteBackupRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/route/old': {
+      id: '/_authenticated/route/old'
+      path: '/route/old'
+      fullPath: '/route/old'
+      preLoaderRoute: typeof AuthenticatedRouteOldRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/services/': {
       id: '/_authenticated/services/'
       path: '/'
@@ -373,17 +425,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedServicesViewRouteImport
       parentRoute: typeof AuthenticatedServicesRoute
     }
+    '/_authenticated/reports/index/backup': {
+      id: '/_authenticated/reports/index/backup'
+      path: '/index/backup'
+      fullPath: '/reports/index/backup'
+      preLoaderRoute: typeof AuthenticatedReportsIndexBackupRouteImport
+      parentRoute: typeof AuthenticatedReportsRoute
+    }
   }
 }
 
 interface AuthenticatedReportsRouteChildren {
   AuthenticatedReportsViewRoute: typeof AuthenticatedReportsViewRoute
   AuthenticatedReportsIndexRoute: typeof AuthenticatedReportsIndexRoute
+  AuthenticatedReportsIndexBackupRoute: typeof AuthenticatedReportsIndexBackupRoute
 }
 
 const AuthenticatedReportsRouteChildren: AuthenticatedReportsRouteChildren = {
   AuthenticatedReportsViewRoute: AuthenticatedReportsViewRoute,
   AuthenticatedReportsIndexRoute: AuthenticatedReportsIndexRoute,
+  AuthenticatedReportsIndexBackupRoute: AuthenticatedReportsIndexBackupRoute,
 }
 
 const AuthenticatedReportsRouteWithChildren =
@@ -415,6 +476,8 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedServicesRoute: typeof AuthenticatedServicesRouteWithChildren
   AuthenticatedUsersRoute: typeof AuthenticatedUsersRoute
   AuthenticatedWeaponsRoute: typeof AuthenticatedWeaponsRoute
+  AuthenticatedRouteBackupRoute: typeof AuthenticatedRouteBackupRoute
+  AuthenticatedRouteOldRoute: typeof AuthenticatedRouteOldRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
@@ -428,6 +491,8 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedServicesRoute: AuthenticatedServicesRouteWithChildren,
   AuthenticatedUsersRoute: AuthenticatedUsersRoute,
   AuthenticatedWeaponsRoute: AuthenticatedWeaponsRoute,
+  AuthenticatedRouteBackupRoute: AuthenticatedRouteBackupRoute,
+  AuthenticatedRouteOldRoute: AuthenticatedRouteOldRoute,
 }
 
 const AuthenticatedRouteRouteWithChildren =
